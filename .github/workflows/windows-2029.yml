@@ -14,14 +14,13 @@ jobs:
 
       - name: 🔧 Enable RDP, Set Password & Configure Firewall
         run: |
-          # 1. RDP Bağlantısını aktif ediyoruz
+          # RDP Bağlantısını aktif ediyoruz
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
           
-          # 2. Girişte kullanacağınız şifreyi kesin olarak 'Password123!' yapıyoruz
-          net user runneradmin Password123! /add
-          net localgroup administrators runneradmin /add
+          # Mevcut kullanıcının şifresini hata almadan 'Password123!' olarak güncelliyoruz
+          net user runneradmin Password123!
 
       - name: 🚀 Start Reliable TCP Tunnel via Serveo
         shell: pwsh
@@ -30,7 +29,7 @@ jobs:
           Start-Process -FilePath "ssh" -ArgumentList "-o StrictHostKeyChecking=no -R 0:127.0.0.1:3389 serveo.net" -RedirectStandardOutput "serveo_output.txt" -WindowStyle Hidden
           Start-Sleep -Seconds 15
 
-      - name: 🌐 Display RDP Connection URL
+      - name: 🌐 Get RDP URL
         shell: pwsh
         run: |
           if (Test-Path "serveo_output.txt") {
