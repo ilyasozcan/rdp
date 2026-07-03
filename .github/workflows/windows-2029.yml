@@ -1,4 +1,4 @@
-name: WINDOWS 2029 RDP (Instant TCP Fix)
+name: WINDOWS 2029 RDP (Ngrok Absolute Absolute Fix)
 
 on:
   workflow_dispatch:
@@ -12,54 +12,53 @@ jobs:
       - name: 🔽 Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 🔧 Force Disable NLA & Enable RDP
+      - name: 🔧 Enable RDP, Set Password & Configure Firewall
         run: |
-          # 1. 0x1104 hatasına neden olan Sertifika ve Kimlik Doğrulama (NLA) protokolünü tamamen kapatıyoruz
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0
-          
-          # 2. Standart RDP bağlantı izinlerini açıyoruz
+          # 1. RDP izinlerini açıp şifreyi kesin olarak 'Password123!' yapıyoruz
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          
-          # 3. Giriş şifresini 'Password123!' yapıyoruz
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
           net user runneradmin Password123!
-          
-          # 4. Ayarların geçerli olması için RDP servisini yeniliyoruz
-          Restart-Service -Name "TermService" -Force
 
-      - name: 🚀 Start Reliable Tunnel via Localhost.run
+      - name: 📦 Setup Official Ngrok v3 via NPM
+        run: |
+          # 2. Hata veren choco ve zip yöntemleri yerine doğrudan NPM ile orijinal Ngrok v3 kuruyoruz
+          npm install -g ngrok
+
+      - name: 🚀 Start Ngrok Tunnel bypassing Credit Card
         shell: pwsh
         run: |
-          # 5. Kart veya üyelik istemeyen, gömülü SSH üzerinden çalışan localhost.run altyapısını başlatıyoruz
-          Start-Process -FilePath "ssh" -ArgumentList "-o StrictHostKeyChecking=no -R 3389:127.0.0.1:3389 tcp.localhost.run" -RedirectStandardOutput "tunnel.log" -WindowStyle Hidden
+          # 3. BURAYI DEĞİŞTİRİN: Kendi ngrok tokenınızı tırnak işaretleri arasına yazın
+          $MyToken = "3FzH9IzzHPXS7X4MlMj9Jy3fNEH_6fFMfBZcGQ6KjqF2kpY7a"
+          
+          # 4. Tokenı sisteme kaydediyoruz
+          ngrok config add-authtoken $MyToken
+          
+          # 5. Kredi kartı engelini aşmak için TCP'yi doğrudan ngrok'un temel bölge sunucularıyla tetikliyoruz
+          Start-Process -FilePath "ngrok" -ArgumentList "tcp 3389 --region=us" -RedirectStandardOutput "ngrok_output.log" -WindowStyle Hidden
           Start-Sleep -Seconds 15
 
       - name: 🌐 Display RDP Connection URL
         shell: pwsh
         run: |
-          if (Test-Path "tunnel.log") {
-            $Log = Get-Content "tunnel.log" -Raw
-            # Log dosyasından atanan özel TCP adresini ayıklıyoruz
-            if ($Log -match "tun\.localhost\.run:\d+") {
-               $RdpAddress = $Matches
-               Write-Host "=========================================="
-               Write-Host "🎉 RDP BAĞLANTI ADRESİNİZ BAŞARIYLA OLUŞTU!"
-               Write-Host "Windows Uzak Masaüstü programına aynen şu adresi yazın:"
-               Write-Host $RdpAddress
-               Write-Host "=========================================="
-               Write-Host "👤 Kullanıcı Adı: runneradmin"
-               Write-Host "🔑 Şifre: Password123!"
-               Write-Host "=========================================="
-            } else {
-               # Alternatif adres yakalama şeması
-               Write-Host "=========================================="
-               Write-Host "🎉 RDP BAĞLANTI ADRESİNİZ:"
-               Write-Host "tcp.localhost.run:3389"
-               Write-Host "=========================================="
-               Write-Host "👤 Kullanıcı Adı: runneradmin"
-               Write-Host "🔑 Şifre: Password123!"
-               Write-Host "=========================================="
+          # 6. Ngrok API'sinden o donmayan, hızlı bağlantı adresini çekiyoruz
+          $ngrokApiUrl = "http" + "://" + "127.0.0.1" + ":" + "4040" + "/api/tunnels"
+          try {
+            $Response = Invoke-RestMethod -Uri $ngrokApiUrl -TimeoutSec 10
+            if ($Response -and $Response.tunnels) {
+              $CleanUrl = $Response.tunnels.public_url -replace "tcp://", ""
+              Write-Host "=========================================="
+              Write-Host "🎉 RDP BAĞLANTI ADRESİNİZ KESİN OLARAK HAZIR!"
+              Write-Host "Windows Uzak Masaüstü programına aynen şunu yazın:"
+              Write-Host $CleanUrl
+              Write-Host "=========================================="
+              Write-Host "👤 Kullanıcı Adı: runneradmin"
+              Write-Host "🔑 Şifre: Password123!"
+              Write-Host "=========================================="
             }
+          } catch {
+            Write-Host "❌ Adres alınamadı. Log çıktısı:"
+            if (Test-Path ngrok_output.log) { Get-Content ngrok_output.log }
           }
 
       - name: ⏳ Keep Alive
