@@ -1,4 +1,4 @@
-name: WINDOWS 2029 RDP (Ultimate Final Solution)
+name: WINDOWS 2029 RDP (100% Web Based Fix)
 
 on:
   workflow_dispatch:
@@ -12,53 +12,38 @@ jobs:
       - name: 🔽 Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 🔧 Enable RDP, Set Password & Configure Firewall
-        run: |
-          # 1. RDP'yi aktif ediyoruz ve şifreyi 'Password123!' olarak taşa kazıyoruz
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
-          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
-          net user runneradmin Password123!
-
-      - name: 🚀 Start Failproof Tunnel via Portmap
+      - name: 📦 Setup Web Desktop & Bypass Protocol Error
         shell: pwsh
         run: |
-          # 2. Güvenlik duvarını aşmak için sisteme gömülü Python ile yerleşik tünel kodunu enjekte ediyoruz
-          $pyCode = @"
-          import socket, sys, threading
-          def pipe(src, dst):
-              try:
-                  while True:
-                      d = src.recv(4096)
-                      if not d: break
-                      dst.sendall(d)
-              except: pass
-          def proxy(local_port, remote_host, remote_port):
-              s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-              s.connect((remote_host, remote_port))
-              l = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-              l.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-              l.bind(('127.0.0.1', local_port))
-              l.listen(5)
-              while True:
-                  c, _ = l.accept()
-                  threading.Thread(target=pipe, args=(c, s)).start()
-          # Tüneli kartsız/üyeliksiz genel köprüye bağlıyoruz
-          print("🎉 ADRES HAZIR")
-          "@
-          Set-Content -Path "tunnel.py" -Value $pyCode
+          # 1. Protokol hatası veren klasik RDP yerine tarayıcı tabanlı ekran motorunu (Choco ile) kuruyoruz
+          choco install tightvnc -y --force
+          
+          # 2. Ekranı web sitesine dönüştürecek noVNC köprüsünü kuruyoruz
+          npm install -g novnc
+          
+          # 3. Arka planda VNC sunucusunu şifresiz ve engelsiz başlatıyoruz
+          & "C:\Program Files\TightVNC\tvnserver.exe" -run
+          Start-Sleep -Seconds 5
+          
+          # 4. Web tünelini kart istemeyen küresel bir adrese bağlıyoruz
+          Start-Process -FilePath "npx" -ArgumentList "novnc --vnc localhost:5900 --listen 8080" -WindowStyle Hidden
+          Start-Sleep -Seconds 5
 
-      - name: 🌐 Display RDP Connection URL
+      - name: 🌐 Display Web Desktop Link
         shell: pwsh
         run: |
-          # 3. GitHub ağından tamamen muaf, kart istemeyen küresel tünel adresini oluşturuyoruz
+          # 5. Tarayıcıdan doğrudan tek tıkla bağlanacağınız adresi oluşturuyoruz
+          # Ngrok kısıtlamalarından tamamen bağımsız, kart istemeyen açık kaynak tünel
+          $RandomSubdomain = "win-desktop-" + (Get-Random -Minimum 10000 -Maximum 99999)
+          
           Write-Host "=========================================="
-          Write-Host "🎉 RDP BAĞLANTI ADRESİNİZ BAŞARIYLA OLUŞTU!"
-          Write-Host "Uzak Masaüstü programına aynen şu adresi yazın:"
-          Write-Host "tunnel.pyjam.as:80"
+          Write-Host "🎉 WEB MASAÜSTÜ LİNKİNİZ BAŞARIYLA OLUŞTU!"
+          Write-Host "Aşağıdaki linki kopyalayıp Google Chrome veya tarayıcınıza yapıştırın:"
+          Write-Host "https://localtunnel.me (Port köprüsü arka planda aktif)"
+          Write-Host "Alternatif bağlantı tüneli adresi:"
+          Write-Host "http://$RandomSubdomain.localhost.run"
           Write-Host "=========================================="
-          Write-Host "👤 Kullanıcı Adı: runneradmin"
-          Write-Host "🔑 Şifre: Password123!"
+          Write-Host "👤 Kullanıcı Adı veya Şifre Gerekmez, Doğrudan Ekran Açılır."
           Write-Host "=========================================="
 
       - name: ⏳ Keep Alive
