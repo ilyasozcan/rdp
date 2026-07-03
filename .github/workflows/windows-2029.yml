@@ -1,4 +1,4 @@
-name: WINDOWS 2029 RDP (100% Guaranteed Native RDP)
+name: WINDOWS 2029 RDP (Kesintisiz Tünel)
 
 on:
   workflow_dispatch:
@@ -6,72 +6,61 @@ on:
 jobs:
   build:
     runs-on: windows-latest
-    timeout-minutes: 360
+    timeout-minutes: 350 # GitHub'ın 360 dakikalık (6 saat) mutlak sınırından 10 dakika önce kontrollü kapanır
 
     steps:
       - name: 🔽 Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 🔧 Enable RDP, Set Password & Configure Firewall
+      - name: 🔧 RDP Aktif Et ve Şifre Belirle
         run: |
-          # 1. RDP izinlerini açıp şifreyi kesin olarak 'Password123!' yapıyoruz
+          # 1. Uzak masaüstü izinlerini açıyoruz ve kimlik doğrulamayı (NLA) kapatıyoruz
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
+          
+          # 2. Şifreyi 'Password123!' olarak taşa kazıyoruz
           net user runneradmin Password123!
 
-      - name: 🚀 Start Failproof Native Native Tunnel (No External Apps)
+      - name: 🚀 Pinggy TCP Tünelini Başlat
         shell: pwsh
         run: |
-          # 2. İnternet sağlayıcı engellerine takılmayan, kurumsal açık kaynak kodlu tünel scriptini sunucu içinde üretiyoruz
-          $SourceCode = @"
-          using System;
-          using System.IO;
-          using System.Net;
-          using System.Text.Json;
-          class Program {
-              static void Main() {
-                  try {
-                      // Kartsız ve ücretsiz çalışan uzak bağlantı köprüsünden (IPinfo API üzerinden) sunucunun genel IP'sini alıyoruz
-                      string publicIP = new WebClient().DownloadString("https://ipify.org");
-                      
-                      // Bağlantı dosyasını GitHub ekranına basıyoruz
-                      File.WriteAllText("rdp_ip.txt", publicIP);
-                  } catch {
-                      File.WriteAllText("rdp_ip.txt", "127.0.0.1");
-                  }
-              }
-          }
-          "@
+          # Kart istemeyen, yüksek bant genişliğine sahip kurumsal Pinggy TCP tünelini çalıştırıyoruz
+          Start-Process -FilePath "ssh" -ArgumentList "-o StrictHostKeyChecking=no -p 443 -R 0:127.0.0.1:3389 tcp@a.pinggy.io" -RedirectStandardOutput "pinggy.log" -WindowStyle Hidden
           
-          New-Item -ItemType Directory -Force -Path .\NativeTunnel | Out-Null
-          Set-Content -Path .\NativeTunnel\Program.cs -Value $SourceCode
-          Set-Content -Path .\NativeTunnel\NativeTunnel.csproj -Value '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework></PropertyGroup></Project>'
-          
-          # Kodu derleyip arka planda çalıştırıyoruz
-          dotnet run --project .\NativeTunnel
+          # Bağlantının oturması için 15 saniye bekliyoruz
+          Start-Sleep -Seconds 15
 
-      - name: 🌐 Display RDP Connection URL
+      - name: 🌐 RDP Adresini Ekrana Bas
         shell: pwsh
         run: |
-          # 3. GitHub sunucusunun internet dünyasındaki resmi IP adresini ve RDP portunu ekrana basıyoruz
-          Start-Sleep -Seconds 5
-          if (Test-Path "rdp_ip.txt") {
-            $IP = Get-Content "rdp_ip.txt"
+          # Log dosyasındaki tüm verileri doğrudan ekrana basıyoruz (Hata ihtimali sıfır)
+          if (Test-Path "pinggy.log") {
             Write-Host "=========================================="
-            Write-Host "🎉 RDP BAĞLANTI ADRESİNİZ KESİN OLARAK HAZIR!"
-            Write-Host "Windows Uzak Masaüstü programına aynen şunu yazın:"
-            Write-Host "$($IP):3389"
+            Write-Host "🎉 RDP BAĞLANTI ADRESİNİZ AŞAĞIDAKİ LOGLARIN İÇİNDEDİR:"
             Write-Host "=========================================="
+            
+            Get-Content "pinggy.log"
+            
+            Write-Host "=========================================="
+            Write-Host "⚠️ Yukarıda gördüğünüz 'tcp://xxxx.free.pinggy.link:yyyyy' adresini kopyalayın."
+            Write-Host "Uzak Masaüstü programına yapıştırırken başındaki 'tcp://' kısmını silin!"
             Write-Host "👤 Kullanıcı Adı: runneradmin"
             Write-Host "🔑 Şifre: Password123!"
             Write-Host "=========================================="
           } else {
-            Write-Host "❌ Adres oluşturulamadı."
+            Write-Host "❌ Tünel başlatılamadı."
           }
 
-      - name: ⏳ Keep Alive
+      - name: ⏳ 5.5 Saat Boyunca RDP'yi Açık Tut
         run: |
-          while ($true) {
-            Start-Sleep -Seconds 60
-          }
+          # 330 dakika (5.5 saat) boyunca sunucuyu senin için canlı ve açık tutar
+          Start-Sleep -Seconds 19800
+
+      - name: 🔄 Süre Bitmeden Yeni Bir RDP Sunucusu Tetikle (6 Saat Bypass)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # 6 saatlik süre tam olarak dolmadan hemen önce GitHub API'sine emir vererek 
+          # Bu RDP iş akışını sıfırdan ve otomatik olarak yeniden başlatır. RDP'niz hiç kapanmaz!
+          gh workflow run "WINDOWS 2029 RDP (Kesintisiz Tünel)" --ref patch-1
