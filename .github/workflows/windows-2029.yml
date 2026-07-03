@@ -18,14 +18,10 @@ jobs:
       - name: 🔽 Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 🔽 Download Ngrok
+      - name: 📦 Install Ngrok via Chocolatey
         run: |
-          Invoke-WebRequest https://equinox.io -OutFile ngrok.zip
-
-      - name: 📦 Extract Ngrok
-        run: |
-          # PowerShell hatasını engellemek için yerleşik tar.exe kullanıyoruz
-          tar -xf ngrok.zip
+          # Zip indirme ve çıkarma dertlerini bitiren en güvenli yöntem
+          choco install ngrok -y
 
       - name: 🔐 Set Ngrok Authtoken
         shell: pwsh
@@ -34,7 +30,7 @@ jobs:
           $envToken = '${{ secrets.NGROK_AUTH }}'
           if ($inputToken) { $token = $inputToken } else { $token = $envToken }
           if (-not $token) { Write-Host "❌ No token found!"; exit 1 }
-          .\ngrok.exe config add-authtoken $token
+          ngrok config add-authtoken $token
 
       - name: 🔧 Enable RDP & Configure Firewall
         run: |
@@ -43,7 +39,7 @@ jobs:
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
 
       - name: 🚀 Start Ngrok Tunnel (Hidden Window)
-        run: Start-Process -WindowStyle Hidden PowerShell -ArgumentList '.\ngrok.exe tcp --region ap 3389'
+        run: Start-Process -WindowStyle Hidden PowerShell -ArgumentList 'ngrok tcp --region ap 3389'
 
       - name: 🌐 Get RDP URL
         run: |
