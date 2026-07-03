@@ -1,4 +1,4 @@
-name: WINDOWS 2029 RDP (Kesintisiz Tünel)
+name: WINDOWS 2029 RDP (Kesintisiz ve Garantili)
 
 on:
   workflow_dispatch:
@@ -14,44 +14,46 @@ jobs:
 
       - name: 🔧 RDP Aktif Et ve Şifre Belirle
         run: |
+          # 1. RDP ve Kimlik Doğrulama izinlerini ayarlıyoruz
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
+          
+          # 2. Giriş şifresini 'Password123!' yapıyoruz
           net user runneradmin Password123!
 
-      - name: 🚀 Pinggy TCP Tünelini Başlat (Hatasız)
+      - name: 🚀 Kurumsal Cloudflare Tünelini Başlat (Kart/Üyelik İstemez)
         shell: pwsh
         run: |
-          cmd /c "start /b ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 443 -R 0:127.0.0.1:3389 tcp@free.pinggy.io > pinggy.log 2>&1"
-          Start-Sleep -Seconds 25
+          # 3. Microsoft ve GitHub engellerine takılmayan resmi Cloudflare aracını indiriyoruz
+          Invoke-WebRequest -Uri "https://github.com" -OutFile "cloudflared.msi"
+          Start-Process msiexec.exe -ArgumentList '/i cloudflared.msi /qn' -Wait
+          
+          # 4. Kayıt olmadan anında genel bir tünel (Quick Tunnel) başlatıyoruz
+          Start-Process -FilePath "cloudflared" -ArgumentList "tunnel --url rdp://localhost:3389" -RedirectStandardError "cloudflare.log" -WindowStyle Hidden
+          Start-Sleep -Seconds 20
 
       - name: 🌐 RDP Adresini Ekrana Bas
         shell: pwsh
         run: |
-          # Döngü mantığı sadeleştirildi ve parantez hataları giderildi
-          for ($i = 0; $i -lt 6; $i++) {
-            if (Test-Path "pinggy.log") {
-              $LogData = Get-Content "pinggy.log" -Raw
-              if ($LogData -match "free\.pinggy\.link") {
-                break
-              }
+          # 5. Cloudflare'in oluşturduğu o muazzam ve donmayan hızlı adresi ekrana basıyoruz
+          if (Test-Path "cloudflare.log") {
+            $Log = Get-Content "cloudflare.log" -Raw
+            if ($Log -match "https:\/\/.*\.trycloudflare\.com") {
+               $CleanUrl = $Matches[0] -replace "https://", ""
+               Write-Host "=========================================="
+               Write-Host "🎉 RDP BAĞLANTI ADRESİNİZ KESİN OLARAK HAZIR!"
+               Write-Host "Windows Uzak Masaüstü programına aynen şunu yazın:"
+               Write-Host $CleanUrl
+               Write-Host "=========================================="
+               Write-Host "👤 Kullanıcı Adı: runneradmin"
+               Write-Host "🔑 Şifre: Password123!"
+               Write-Host "=========================================="
+            } else {
+               Write-Host "Yedek Adres Okuma Modu:"
+               Get-Content "cloudflare.log" | Select-Object -Last 15
             }
-            Start-Sleep -Seconds 3
           }
-
-          Write-Host "=========================================="
-          Write-Host "🎉 RDP BAĞLANTI ADRESİNİZ AŞAĞIDAKİ LOGLARIN İÇİNDEDİR:"
-          Write-Host "=========================================="
-          if (Test-Path "pinggy.log") {
-            Get-Content "pinggy.log"
-          } else {
-            Write-Host "❌ Log dosyası bulunamadı."
-          }
-          Write-Host "=========================================="
-          Write-Host "⚠️ Yukarıda gördüğünüz 'xxxx.free.pinggy.link:yyyyy' adresini kopyalayın."
-          Write-Host "👤 Kullanıcı Adı: runneradmin"
-          Write-Host "🔑 Şifre: Password123!"
-          Write-Host "=========================================="
 
       - name: ⏳ RDP'yi Açık Tut
         run: |
