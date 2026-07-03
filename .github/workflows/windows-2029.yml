@@ -1,4 +1,4 @@
-name: WINDOWS 2029 RDP
+name: WINDOWS 2029 RDP (Pagekite)
 
 on:
   workflow_dispatch:
@@ -18,55 +18,38 @@ jobs:
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
 
-      - name: 🚀 Start Ngrok Tunnel via Node.js SDK
+      - name: 🚀 Start TCP Tunnel via Pagekite
         shell: pwsh
         run: |
-          # 1. Resmi ngrok Node.js motorunu kuruyoruz
-          npm install @ngrok/ngrok
+          # Python tabanlı ve kart istemeyen Pagekite aracını indiriyoruz
+          Invoke-WebRequest -Uri "https://pagekite.net" -OutFile "pagekite.py"
           
-          # 2. Logları bir dosyaya yazacak şekilde Javascript kodunu güncelliyoruz
-          $jsCode = @"
-          const ngrok = require('@ngrok/ngrok');
-          const fs = require('fs');
-          (async function() {
-            try {
-              const session = await new ngrok.SessionBuilder()
-                .authtoken("3FzH9IzzHPXS7X4MlMj9Jy3fNEH_6fFMfBZcGQ6KjqF2kpY7a")
-                .connect();
-              const tunnel = await session.tcpEndpoint()
-                .listen();
-              
-              // Adresi GitHub'ın okuyabilmesi için dosyaya yazıyoruz
-              fs.writeFileSync('rdp_url.txt', tunnel.url());
-              
-              setInterval(() => {}, 1000);
-            } catch (err) {
-              fs.writeFileSync('rdp_url.txt', 'HATA: ' + err.message);
-              process.exit(1);
-            }
-          })();
-          "@
+          # Rastgele ve benzersiz bir subdomain oluşturuyoruz
+          $RandomName = "github-rdp-" + (Get-Random -Minimum 10000 -Maximum 99999)
           
-          Set-Content -Path "start_tunnel.js" -Value $jsCode
+          # Tüneli arka planda başlatıyoruz (Kart veya şifre istemez)
+          Start-Process -FilePath "python" -ArgumentList "pagekite.py 3389 tcp:$RandomName.pagekite.me" -RedirectStandardOutput "tunnel.log" -WindowStyle Hidden
           
-          # 3. Süreci arka planda başlatıyoruz
-          Start-Process -FilePath "node" -ArgumentList "start_tunnel.js" -WindowStyle Hidden
+          # Bağlantının oturması için bekliyoruz
+          Start-Sleep -Seconds 15
           
-          # Tünelin adresi dosyaya yazması için 12 saniye bekliyoruz
-          Start-Sleep -Seconds 12
+          # Bilgileri ekrana yazdırmak için kaydediyoruz
+          Set-Content -Path "rdp_address.txt" -Value "$RandomName.pagekite.me"
 
       - name: 🌐 Display RDP Connection URL
         shell: pwsh
         run: |
-          # Oluşan adresi okuyor ve doğrudan GitHub ekranına basıyoruz
-          if (Test-Path "rdp_url.txt") {
-            $Url = Get-Content "rdp_url.txt"
+          if (Test-Path "rdp_address.txt") {
+            $Address = Get-Content "rdp_address.txt"
             Write-Host "=========================================="
             Write-Host "🎉 RDP BAĞLANTI ADRESİNİZ:"
-            Write-Host $Url
+            Write-Host $Address
+            Write-Host "=========================================="
+            Write-Host "⚠️ Bağlanırken Uzak Masaüstü programına port yazmayın."
+            Write-Host "Sadece yukarıdaki adresi yapıştırıp bağlanın."
             Write-Host "=========================================="
           } else {
-            Write-Host "❌ Adres dosyası henüz oluşturulamadı."
+            Write-Host "❌ Tünel adresi oluşturulamadı."
           }
 
       - name: ⏳ Keep Alive
