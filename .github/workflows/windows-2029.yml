@@ -23,30 +23,32 @@ jobs:
       - name: 🚀 Start Pinggy TCP Tunnel
         shell: pwsh
         run: |
-          # 2. Resmi Pinggy dokümantasyonuna uygun olarak tcp@ ön ekiyle tüneli TCP modunda başlatıyoruz
-          Start-Process -FilePath "ssh" -ArgumentList "-o StrictHostKeyChecking=no -p 443 -R 0:127.0.0.1:3389 tcp@free.pinggy.io" -RedirectStandardOutput "pinggy_output.log" -WindowStyle Hidden
-          Start-Sleep -Seconds 15
+          # 2. Windows SSH istemci hatasını önlemek için localhost yerine doğrudan 127.0.0.1 IP adresini kullanıyoruz
+          # Bağlantıyı resmi TCP adres havuzuna yönlendiriyoruz
+          Start-Process -FilePath "ssh" -ArgumentList "-o StrictHostKeyChecking=no -p 443 -R 0:127.0.0.1:3389 tcp@a.pinggy.io" -RedirectStandardOutput "pinggy_output.log" -WindowStyle Hidden
+          
+          # Tünelin oturması ve adresi sunucudan çekmesi için 20 saniye bekliyoruz
+          Start-Sleep -Seconds 20
 
       - name: 🌐 Display RDP Connection URL
         shell: pwsh
         run: |
-          # 3. Log dosyasından size atanan yüksek hızlı RDP adresini ayıklıyoruz
+          # 3. Log dosyasının tamamını ekrana basıyoruz, böylece adresi elle doğrudan kopyalayabilirsiniz
           if (Test-Path "pinggy_output.log") {
-            $Log = Get-Content "pinggy_output.log" -Raw
-            if ($Log -match ".\.free\.pinggy\.link:\d+") {
-               $RdpAddress = $Matches[0]
-               Write-Host "=========================================="
-               Write-Host "🎉 RDP BAĞLANTI ADRESİNİZ KESİN OLARAK HAZIR!"
-               Write-Host "Windows Uzak Masaüstü programına aynen şunu yazın:"
-               Write-Host $RdpAddress
-               Write-Host "=========================================="
-               Write-Host "👤 Kullanıcı Adı: runneradmin"
-               Write-Host "🔑 Şifre: Password123!"
-               Write-Host "=========================================="
-            } else {
-               Write-Host "❌ Adres satırı henüz hazır değil veya log formatı değişti. Log çıktısı:"
-               Write-Host $Log
-            }
+            Write-Host "=========================================="
+            Write-Host "🎉 NİHAİ BAĞLANTI LOGLARI AŞAĞIDADIR:"
+            Write-Host "=========================================="
+            
+            # Log içeriğini ekrana temizce döküyoruz
+            $Content = Get-Content "pinggy_output.log"
+            $Content
+            
+            Write-Host "=========================================="
+            Write-Host "⚠️ YUKARIDAKİ LOGLARDA GÖRDÜĞÜNÜZ 'tcp://....link:PORT' ADRESİNİ KOPYALAYIN."
+            Write-Host "Uzak Masaüstü programına yapıştırırken başındaki 'tcp://' kısmını silin."
+            Write-Host "👤 Kullanıcı Adı: runneradmin"
+            Write-Host "🔑 Şifre: Password123!"
+            Write-Host "=========================================="
           } else {
             Write-Host "❌ Tünel log dosyası oluşturulamadı."
           }
