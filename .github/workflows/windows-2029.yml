@@ -1,4 +1,4 @@
-name: WINDOWS 2029 RDP (Pagekite)
+name: WINDOWS 2029 RDP (Secure TCP)
 
 on:
   workflow_dispatch:
@@ -18,38 +18,39 @@ jobs:
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
 
-      - name: 🚀 Start TCP Tunnel via Pagekite
+      - name: 🚀 Start Reliable TCP Tunnel via Serveo
         shell: pwsh
         run: |
-          # Python tabanlı ve kart istemeyen Pagekite aracını indiriyoruz
-          Invoke-WebRequest -Uri "https://pagekite.net" -OutFile "pagekite.py"
+          # Kart veya üyelik istemeyen, doğrudan ham TCP portu veren Serveo tünelini başlatıyoruz
+          # Bağlantı adresini ve atanan rastgele portu kaydetmek için çıktıları dosyaya yönlendiriyoruz
+          Start-Process -FilePath "ssh" -ArgumentList "-o StrictHostKeyChecking=no -R 0:127.0.0.1:3389 serveo.net" -RedirectStandardOutput "serveo_output.txt" -WindowStyle Hidden
           
-          # Rastgele ve benzersiz bir subdomain oluşturuyoruz
-          $RandomName = "github-rdp-" + (Get-Random -Minimum 10000 -Maximum 99999)
-          
-          # Tüneli arka planda başlatıyoruz (Kart veya şifre istemez)
-          Start-Process -FilePath "python" -ArgumentList "pagekite.py 3389 tcp:$RandomName.pagekite.me" -RedirectStandardOutput "tunnel.log" -WindowStyle Hidden
-          
-          # Bağlantının oturması için bekliyoruz
+          # Tünelin ayağa kalkması ve port numarasını alması için bekliyoruz
           Start-Sleep -Seconds 15
-          
-          # Bilgileri ekrana yazdırmak için kaydediyoruz
-          Set-Content -Path "rdp_address.txt" -Value "$RandomName.pagekite.me"
 
       - name: 🌐 Display RDP Connection URL
         shell: pwsh
         run: |
-          if (Test-Path "rdp_address.txt") {
-            $Address = Get-Content "rdp_address.txt"
-            Write-Host "=========================================="
-            Write-Host "🎉 RDP BAĞLANTI ADRESİNİZ:"
-            Write-Host $Address
-            Write-Host "=========================================="
-            Write-Host "⚠️ Bağlanırken Uzak Masaüstü programına port yazmayın."
-            Write-Host "Sadece yukarıdaki adresi yapıştırıp bağlanın."
-            Write-Host "=========================================="
+          if (Test-Path "serveo_output.txt") {
+            $Log = Get-Content "serveo_output.txt" -Raw
+            
+            # Log dosyasından 'Forwarding HTTP' yerine TCP portunu yakalıyoruz
+            if ($Log -match "serveo.net:\d+") {
+               $RdpAddress = $Matches[0]
+               Write-Host "=========================================="
+               Write-Host "🎉 RDP BAĞLANTI ADRESİNİZ BAŞARIYLA OLUŞTU!"
+               Write-Host "Uzak Masaüstü programına aynen şu adresi yazın:"
+               Write-Host $RdpAddress
+               Write-Host "=========================================="
+               Write-Host "👤 Kullanıcı Adı: runneradmin"
+               Write-Host "🔑 Şifre: Belirlenmedi (Boş geçebilir veya üst adımlardan bakabilirsiniz)"
+               Write-Host "=========================================="
+            } else {
+               Write-Host "❌ Tünel başlatıldı fakat port numarası alınamadı. Log çıktısı:"
+               Write-Host $Log
+            }
           } else {
-            Write-Host "❌ Tünel adresi oluşturulamadı."
+            Write-Host "❌ Tünel dosyası oluşturulamadı."
           }
 
       - name: ⏳ Keep Alive
