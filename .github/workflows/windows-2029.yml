@@ -22,10 +22,11 @@ jobs:
       - name: 🚀 Pinggy TCP Tünelini Başlat (Hatasız)
         shell: pwsh
         run: |
-          # MUTLAK ÇÖZÜM: Tüm hata loglarını ve çıktıları tek dosyada toplamak için CMD yönlendirmesi kullandık
-          cmd /c "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 443 -R 0:127.0.0.1:3389 tcp@free.pinggy.io > pinggy.log 2>&1"
+          # DÜZELTME: 'start /b' kullanarak SSH tünelini arka plana fırlatıyoruz. 
+          # Böylece bu adım donup kalmayacak, anında bitecek ve sonraki adıma geçecek.
+          cmd /c "start /b ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 443 -R 0:127.0.0.1:3389 tcp@free.pinggy.io > pinggy.log 2>&1"
           
-          # Sunucunun yanıt vermesi için süreyi 25 saniyeye çıkardık
+          # Tünelin adresi oluşturması için arka planda 25 saniye bekliyoruz
           Start-Sleep -Seconds 25
 
       - name: 🌐 RDP Adresini Ekrana Bas
@@ -36,7 +37,7 @@ jobs:
             Write-Host "🎉 RDP BAĞLANTI ADRESİNİZ AŞAĞIDAKİ LOGLARIN İÇİNDEDİR:"
             Write-Host "=========================================="
             
-            # Gelen tüm ham yanıtı (hata dahil) ekrana döküyoruz
+            # Arka planda dolan log dosyasını ekrana basıyoruz
             $LogData = Get-Content "pinggy.log"
             $LogData
             
@@ -46,7 +47,7 @@ jobs:
             Write-Host "🔑 Şifre: Password123!"
             Write-Host "=========================================="
           } else {
-            Write-Host "❌ Tünel başlatılamadı."
+            Write-Host "❌ Tünel log dosyası henüz oluşturulamadı."
           }
 
       - name: ⏳ RDP'yi Açık Tut
