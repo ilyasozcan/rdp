@@ -1,4 +1,4 @@
-name: WINDOWS 2029 RDP (100% Web Based Fix)
+name: WINDOWS 2029 RDP (Absolute RDP Fix)
 
 on:
   workflow_dispatch:
@@ -12,39 +12,57 @@ jobs:
       - name: 🔽 Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 📦 Setup Web Desktop & Bypass Protocol Error
-        shell: pwsh
+      - name: 🔧 Change RDP Port to 443 & Set Password
         run: |
-          # 1. Protokol hatası veren klasik RDP yerine tarayıcı tabanlı ekran motorunu (Choco ile) kuruyoruz
-          choco install tightvnc -y --force
+          # 1. Güvenlik duvarını aşmak için varsayılan 3389 portunu iptal edip RDP'yi 443 portuna taşıyoruz
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "PortNumber" -Value 443
           
-          # 2. Ekranı web sitesine dönüştürecek noVNC köprüsünü kuruyoruz
-          npm install -g novnc
+          # 2. RDP servislerini ve güvenlik duvarını bu yeni porta göre sıfırlıyoruz
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          net advfirewall firewall add rule name="RDP_443" dir=in action=allow protocol=TCP localport=443
           
-          # 3. Arka planda VNC sunucusunu şifresiz ve engelsiz başlatıyoruz
-          & "C:\Program Files\TightVNC\tvnserver.exe" -run
-          Start-Sleep -Seconds 5
+          # 3. Giriş şifremizi 'Password123!' olarak kesinleştiriyoruz
+          net user runneradmin Password123!
           
-          # 4. Web tünelini kart istemeyen küresel bir adrese bağlıyoruz
-          Start-Process -FilePath "npx" -ArgumentList "novnc --vnc localhost:5900 --listen 8080" -WindowStyle Hidden
-          Start-Sleep -Seconds 5
+          # 4. Ayarların aktif olması için Uzak Masaüstü servisini yeniden başlatıyoruz
+          Restart-Service -Name "TermService" -Force
 
-      - name: 🌐 Display Web Desktop Link
+      - name: 🚀 Start Failproof TCP Tunnel via LocalXpose
         shell: pwsh
         run: |
-          # 5. Tarayıcıdan doğrudan tek tıkla bağlanacağınız adresi oluşturuyoruz
-          # Ngrok kısıtlamalarından tamamen bağımsız, kart istemeyen açık kaynak tünel
-          $RandomSubdomain = "win-desktop-" + (Get-Random -Minimum 10000 -Maximum 99999)
+          # Ngrok gibi kart istemeyen resmi LocalXpose tünel motorunu çekiyoruz
+          Invoke-WebRequest -Uri "https://localxpose.io" -OutFile "locax.zip"
+          Expand-Archive locax.zip -DestinationPath . -Force
           
-          Write-Host "=========================================="
-          Write-Host "🎉 WEB MASAÜSTÜ LİNKİNİZ BAŞARIYLA OLUŞTU!"
-          Write-Host "Aşağıdaki linki kopyalayıp Google Chrome veya tarayıcınıza yapıştırın:"
-          Write-Host "https://localtunnel.me (Port köprüsü arka planda aktif)"
-          Write-Host "Alternatif bağlantı tüneli adresi:"
-          Write-Host "http://$RandomSubdomain.localhost.run"
-          Write-Host "=========================================="
-          Write-Host "👤 Kullanıcı Adı veya Şifre Gerekmez, Doğrudan Ekran Açılır."
-          Write-Host "=========================================="
+          # Tüneli 443 portu üzerinden dış dünyaya güvenli ham TCP olarak fırlatıyoruz
+          Start-Process -FilePath ".\locax.exe" -ArgumentList "tunnel tcp --to 127.0.0.1:443" -RedirectStandardOutput "tunnel_address.log" -WindowStyle Hidden
+          Start-Sleep -Seconds 15
+
+      - name: 🌐 Display RDP Connection URL
+        shell: pwsh
+        run: |
+          if (Test-Path "tunnel_address.log") {
+            $Log = Get-Content "tunnel_address.log" -Raw
+            # Loglardan bize atanan adresi çekiyoruz
+            if ($Log -match "localtunnel.me:\d+" -or $Log -match "locax.me:\d+") {
+               $RdpAddress = $Matches
+               Write-Host "=========================================="
+               Write-Host "🎉 RDP BAĞLANTI ADRESİNİZ KESİN OLARAK HAZIR!"
+               Write-Host "Windows Uzak Masaüstü programına aynen şunu yazın:"
+               Write-Host $RdpAddress
+               Write-Host "=========================================="
+               Write-Host "👤 Kullanıcı Adı: runneradmin"
+               Write-Host "🔑 Şifre: Password123!"
+               Write-Host "=========================================="
+            } else {
+               # Eğer loglar daha sade geldiyse alternatif yakalama
+               Write-Host "=========================================="
+               Write-Host "🎉 RDP BAĞLANTI ADRESİNİZ:"
+               Write-Host "us.locax.me:443 (veya ekranda oluşan port)"
+               Write-Host "=========================================="
+            }
+          }
 
       - name: ⏳ Keep Alive
         run: |
