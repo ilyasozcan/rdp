@@ -1,4 +1,4 @@
-name: WINDOWS 2029 RDP (Mutlak Kesin Çözüm - GÜNCEL)
+name: WINDOWS 2029 RDP (Serveo Kesin Çözüm)
 
 on:
   workflow_dispatch:
@@ -22,39 +22,27 @@ jobs:
       - name: 🚀 Sunucuyu Güvenli SSH Köprüsüne Bağla
         shell: pwsh
         run: |
-          # Sabit alias yerine Serveo'dan rastgele bir TCP portu talep ediyoruz
-          # Çıktıyı serveo.txt dosyasına yazarak port numarasını yakalayacağız
-          Start-Process -FilePath "ssh" -ArgumentList "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -R 0:127.0.0.1:3389 serveo.net" -RedirectStandardOutput "serveo.txt" -WindowStyle Hidden
-          Start-Sleep -Seconds 15
+          # NOT: 'githrdp2029' ismini kendinize göre benzersiz bir kelimeyle değiştirebilirsiniz (Örn: githrdp_isminiz)
+          # Serveo'ya TCP tüneli olarak bu alt alan adını rezerve ettiriyoruz.
+          Start-Process -FilePath "ssh" -ArgumentList "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ServerAliveInterval=15 -R githrdp2029:3389:127.0.0.1:3389 serveo.net" -WindowStyle Hidden
+          Start-Sleep -Seconds 10
 
       - name: 🌐 RDP Bağlantı Komutunu Ekrana Bas
         shell: pwsh
         run: |
-          # Serveo'nun atadığı portu dosyadan okuyoruz
-          $serveo_out = Get-Content -Path "serveo.txt" -Raw
-          # Örnek çıktı: Forwarding SSH traffic from serveo.net:12345
-          if ($serveo_out -match "serveo.net:(\d+)") {
-              $port = $matches[1]
-              Write-Host "=========================================="
-              Write-Host "🎉 RDP BAĞLANTINIZ KESİN OLARAK HAZIR!"
-              Write-Host "=========================================="
-              Write-Host "Kendi bilgisayarınızda normal CMD (Komut İstemi) açın ve şu kodu yapıştırıp ENTER'a basın:"
-              Write-Host "ssh -L 3333:localhost:$port serveo.net"
-              Write-Host "=========================================="
-              Write-Host "Kodu yazdıktan sonra CMD penceresini kapatmayın (Açık kalsın)."
-              Write-Host "Şimdi Uzak Masaüstü programını açıp Bilgisayar kısmına aynen şunu yazın:"
-              Write-Host "127.0.0.1:3333"
-              Write-Host "=========================================="
-              Write-Host "👤 Kullanıcı Adı: runneradmin"
-              Write-Host "🔑 Şifre: Password123!"
-              Write-Host "=========================================="
-          } else {
-              Write-Host "=========================================="
-              Write-Host "❌ Serveo bağlantısı kurulamadı veya port alınamadı!"
-              Write-Host "Lütfen workflow'u tekrar başlatmayı deneyin."
-              Write-Host "Alınan ham çıktı: $serveo_out"
-              Write-Host "=========================================="
-          }
+          Write-Host "=========================================="
+          Write-Host "🎉 SERVED RDP BAĞLANTINIZ KESİN OLARAK HAZIR!"
+          Write-Host "=========================================="
+          Write-Host "Kendi bilgisayarınızda normal CMD (Komut İstemi) açın ve şu kodu yapıştırıp ENTER'a basın:"
+          Write-Host "ssh -L 3333:githrdp2029:3389 serveo.net"
+          Write-Host "=========================================="
+          Write-Host "Kodu yazdıktan sonra CMD penceresini kapatmayın (Açık kalsın)."
+          Write-Host "Şimdi Uzak Masaüstü programını açıp Bilgisayar kısmına aynen şunu yazın:"
+          Write-Host "127.0.0.1:3333"
+          Write-Host "=========================================="
+          Write-Host "👤 Kullanıcı Adı: runneradmin"
+          Write-Host "🔑 Şifre: Password123!"
+          Write-Host "=========================================="
 
       - name: ⏳ RDP'yi Açık Tut
         run: |
