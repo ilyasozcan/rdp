@@ -12,10 +12,10 @@ jobs:
       - name: 🔽 Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 📦 Install Official Ngrok v3 via Winget
+      - name: 🔄 Force Update Pre-installed Ngrok to v3
         run: |
-          # Choco'nun eski sürüm hatasını çözmek için resmi Microsoft Winget ile güncel ngrok kuruyoruz
-          winget install ngrok.ngrok --accept-source-agreements --accept-package-agreements
+          # Sistemde gömülü gelen eski ngrok v2 dosyasını zorla en güncel v3 sürümüne yükseltiyoruz
+          ngrok update --channel=stable
 
       - name: 🔧 Enable RDP & Configure Firewall
         run: |
@@ -25,7 +25,7 @@ jobs:
 
       - name: 🚀 Start Ngrok Tunnel with Token
         run: |
-          # En güncel ngrok v3 üzerinden tüneli ve tokenı doğrudan tetikliyoruz
+          # Güncellenen resmi v3 agent üzerinden tüneli doğrudan ateşliyoruz
           cmd /c "start /b ngrok tcp 3389 --authtoken=3FzH9IzzHPXS7X4MlMj9Jy3fNEH_6fFMfBZcGQ6KjqF2kpY7a > ngrok_output.log 2>&1"
 
       - name: 🌐 Get RDP URL
