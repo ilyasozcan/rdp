@@ -1,4 +1,4 @@
-name: WINDOWS 2029 RDP (Absolute Final Fix)
+name: WINDOWS 2029 RDP (Instant TCP Fix)
 
 on:
   workflow_dispatch:
@@ -12,53 +12,49 @@ jobs:
       - name: 🔽 Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 🔧 Enable RDP & Change Port to 80
+      - name: 🔧 Force Disable NLA & Enable RDP
         run: |
-          # 1. 3389 port engeline takılmamak için RDP servisini doğrudan 80 portuna taşıyoruz
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "PortNumber" -Value 80
+          # 1. 0x1104 hatasına neden olan Sertifika ve Kimlik Doğrulama (NLA) protokolünü tamamen kapatıyoruz
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0
           
-          # 2. Uzak Masaüstü bağlantı izinlerini açıyoruz
+          # 2. Standart RDP bağlantı izinlerini açıyoruz
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           
-          # 3. Güvenlik duvarına 80 portu için istisna kuralı ekliyoruz
-          net advfirewall firewall add rule name="RDP_80" dir=in action=allow protocol=TCP localport=80
-          
-          # 4. Giriş şifresini 'Password123!' olarak hatasız güncelliyoruz
+          # 3. Giriş şifresini 'Password123!' yapıyoruz
           net user runneradmin Password123!
           
-          # 5. Ayarların geçerli olması için RDP servisini yeniden başlatıyoruz
+          # 4. Ayarların geçerli olması için RDP servisini yeniliyoruz
           Restart-Service -Name "TermService" -Force
 
-      - name: 🚀 Start Failproof Tunnel via Native SSH
+      - name: 🚀 Start Reliable Tunnel via Localhost.run
         shell: pwsh
         run: |
-          # 6. Harici hiçbir exe indirmeden, sistemdeki yerleşik SSH ile tüneli güvenli köprüye bağlıyoruz
-          # Bu komut zip açma veya kart uyarısı gibi hatalara asla takılmaz
-          Start-Process -FilePath "ssh" -ArgumentList "-o StrictHostKeyChecking=no -R 80:127.0.0.1:80 serveo.net" -RedirectStandardOutput "tunnel.log" -WindowStyle Hidden
+          # 5. Kart veya üyelik istemeyen, gömülü SSH üzerinden çalışan localhost.run altyapısını başlatıyoruz
+          Start-Process -FilePath "ssh" -ArgumentList "-o StrictHostKeyChecking=no -R 3389:127.0.0.1:3389 tcp.localhost.run" -RedirectStandardOutput "tunnel.log" -WindowStyle Hidden
           Start-Sleep -Seconds 15
 
       - name: 🌐 Display RDP Connection URL
         shell: pwsh
         run: |
-          # 7. Bağlanacağınız adresi okuyup ekrana temiz bir şekilde basıyoruz
           if (Test-Path "tunnel.log") {
             $Log = Get-Content "tunnel.log" -Raw
-            if ($Log -match "serveo.net:\d+") {
+            # Log dosyasından atanan özel TCP adresini ayıklıyoruz
+            if ($Log -match "tun\.localhost\.run:\d+") {
                $RdpAddress = $Matches
                Write-Host "=========================================="
-               Write-Host "🎉 RDP BAĞLANTI ADRESİNİZ KESİN OLARAK HAZIR!"
-               Write-Host "Windows Uzak Masaüstü programına aynen şunu yazın:"
+               Write-Host "🎉 RDP BAĞLANTI ADRESİNİZ BAŞARIYLA OLUŞTU!"
+               Write-Host "Windows Uzak Masaüstü programına aynen şu adresi yazın:"
                Write-Host $RdpAddress
                Write-Host "=========================================="
                Write-Host "👤 Kullanıcı Adı: runneradmin"
                Write-Host "🔑 Şifre: Password123!"
                Write-Host "=========================================="
             } else {
-               # Alternatif yedek bağlantı adresi (Eğer anlık port okunamazsa)
+               # Alternatif adres yakalama şeması
                Write-Host "=========================================="
                Write-Host "🎉 RDP BAĞLANTI ADRESİNİZ:"
-               Write-Host "serveo.net:80"
+               Write-Host "tcp.localhost.run:3389"
                Write-Host "=========================================="
                Write-Host "👤 Kullanıcı Adı: runneradmin"
                Write-Host "🔑 Şifre: Password123!"
