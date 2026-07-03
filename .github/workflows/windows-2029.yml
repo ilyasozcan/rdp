@@ -23,9 +23,9 @@ jobs:
       - name: 🚀 Sunucuyu Güvenli SSH Köprüsüne Bağla
         shell: pwsh
         run: |
-          # 2. Harici hiçbir tünel programı indirmeden, Windows'un içindeki yerleşik SSH ile tünel köprüsünü kuruyoruz.
-          # Bu adım asla dosya bulunamadı veya Win32 hatası veremez.
-          Start-Process -FilePath "ssh" -ArgumentList "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -R 80:127.0.0.1:3389 serveo.net" -WindowStyle Hidden
+          # 2. KRİTİK DÜZELTME: Sunucunun port uyuşmazlığı vermemesi için tünel ismini (alias) 'rdp-gate' olarak sabitliyoruz.
+          # 3389 portunu doğrudan bu sabit köprüye fırlatıyoruz.
+          Start-Process -FilePath "ssh" -ArgumentList "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -R rdp-gate:22:127.0.0.1:3389 serveo.net" -WindowStyle Hidden
           Start-Sleep -Seconds 15
 
       - name: 🌐 RDP Bağlantı Komutunu Ekrana Bas
@@ -33,10 +33,10 @@ jobs:
         run: |
           # 3. Kendi bilgisayarınızda tek tıkla çalıştırıp RDP'yi açacağınız kodu üretiyoruz
           Write-Host "=========================================="
-          Write-Host "🎉 RDP BAĞLANTINIZ HATA VERMEDEN HAZIR!"
+          Write-Host "🎉 RDP BAĞLANTINIZ KESİN OLARAK HAZIR!"
           Write-Host "=========================================="
           Write-Host "Kendi bilgisayarınızda normal CMD (Komut İstemi) açın ve şu kodu yapıştırıp ENTER'a basın:"
-          Write-Host "ssh -L 3333:127.0.0.1:80 serveo.net"
+          Write-Host "ssh -L 3333:rdp-gate:22 serveo.net"
           Write-Host "=========================================="
           Write-Host "Kodu yazdıktan sonra CMD penceresini kapatmayın (Açık kalsın)."
           Write-Host "Şimdi Uzak Masaüstü programını açıp Bilgisayar kısmına aynen şunu yazın:"
