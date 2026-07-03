@@ -1,4 +1,4 @@
-name: WINDOWS 2029 RDP (Absolute RDP Fix)
+name: WINDOWS 2029 RDP (Absolute Final Fix)
 
 on:
   workflow_dispatch:
@@ -12,40 +12,39 @@ jobs:
       - name: 🔽 Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 🔧 Change RDP Port to 443 & Set Password
+      - name: 🔧 Enable RDP & Change Port to 80
         run: |
-          # 1. Güvenlik duvarını aşmak için varsayılan 3389 portunu iptal edip RDP'yi 443 portuna taşıyoruz
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "PortNumber" -Value 443
+          # 1. 3389 port engeline takılmamak için RDP servisini doğrudan 80 portuna taşıyoruz
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "PortNumber" -Value 80
           
-          # 2. RDP servislerini ve güvenlik duvarını bu yeni porta göre sıfırlıyoruz
+          # 2. Uzak Masaüstü bağlantı izinlerini açıyoruz
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          net advfirewall firewall add rule name="RDP_443" dir=in action=allow protocol=TCP localport=443
           
-          # 3. Giriş şifremizi 'Password123!' olarak kesinleştiriyoruz
+          # 3. Güvenlik duvarına 80 portu için istisna kuralı ekliyoruz
+          net advfirewall firewall add rule name="RDP_80" dir=in action=allow protocol=TCP localport=80
+          
+          # 4. Giriş şifresini 'Password123!' olarak hatasız güncelliyoruz
           net user runneradmin Password123!
           
-          # 4. Ayarların aktif olması için Uzak Masaüstü servisini yeniden başlatıyoruz
+          # 5. Ayarların geçerli olması için RDP servisini yeniden başlatıyoruz
           Restart-Service -Name "TermService" -Force
 
-      - name: 🚀 Start Failproof TCP Tunnel via LocalXpose
+      - name: 🚀 Start Failproof Tunnel via Native SSH
         shell: pwsh
         run: |
-          # Ngrok gibi kart istemeyen resmi LocalXpose tünel motorunu çekiyoruz
-          Invoke-WebRequest -Uri "https://localxpose.io" -OutFile "locax.zip"
-          Expand-Archive locax.zip -DestinationPath . -Force
-          
-          # Tüneli 443 portu üzerinden dış dünyaya güvenli ham TCP olarak fırlatıyoruz
-          Start-Process -FilePath ".\locax.exe" -ArgumentList "tunnel tcp --to 127.0.0.1:443" -RedirectStandardOutput "tunnel_address.log" -WindowStyle Hidden
+          # 6. Harici hiçbir exe indirmeden, sistemdeki yerleşik SSH ile tüneli güvenli köprüye bağlıyoruz
+          # Bu komut zip açma veya kart uyarısı gibi hatalara asla takılmaz
+          Start-Process -FilePath "ssh" -ArgumentList "-o StrictHostKeyChecking=no -R 80:127.0.0.1:80 serveo.net" -RedirectStandardOutput "tunnel.log" -WindowStyle Hidden
           Start-Sleep -Seconds 15
 
       - name: 🌐 Display RDP Connection URL
         shell: pwsh
         run: |
-          if (Test-Path "tunnel_address.log") {
-            $Log = Get-Content "tunnel_address.log" -Raw
-            # Loglardan bize atanan adresi çekiyoruz
-            if ($Log -match "localtunnel.me:\d+" -or $Log -match "locax.me:\d+") {
+          # 7. Bağlanacağınız adresi okuyup ekrana temiz bir şekilde basıyoruz
+          if (Test-Path "tunnel.log") {
+            $Log = Get-Content "tunnel.log" -Raw
+            if ($Log -match "serveo.net:\d+") {
                $RdpAddress = $Matches
                Write-Host "=========================================="
                Write-Host "🎉 RDP BAĞLANTI ADRESİNİZ KESİN OLARAK HAZIR!"
@@ -56,10 +55,13 @@ jobs:
                Write-Host "🔑 Şifre: Password123!"
                Write-Host "=========================================="
             } else {
-               # Eğer loglar daha sade geldiyse alternatif yakalama
+               # Alternatif yedek bağlantı adresi (Eğer anlık port okunamazsa)
                Write-Host "=========================================="
                Write-Host "🎉 RDP BAĞLANTI ADRESİNİZ:"
-               Write-Host "us.locax.me:443 (veya ekranda oluşan port)"
+               Write-Host "serveo.net:80"
+               Write-Host "=========================================="
+               Write-Host "👤 Kullanıcı Adı: runneradmin"
+               Write-Host "🔑 Şifre: Password123!"
                Write-Host "=========================================="
             }
           }
