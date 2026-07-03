@@ -12,16 +12,10 @@ jobs:
       - name: 🔽 Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 📦 Download and Install Official Ngrok v3
+      - name: 📦 Install Latest Ngrok v3 via Chocolatey
         run: |
-          # PowerShell yerine sistemin en kararlı aracı curl ile resmi v3 sürümünü çekiyoruz
-          curl -L -o ngrok.zip https://equinox.io
-          
-          # Arşivi doğrudan Windows'un yerleşik tar komutuyla açıyoruz
-          tar -xf ngrok.zip
-          
-          # ngrok'un düzgün çalışması için sistem dosyalarının arasına (PATH) taşıyoruz
-          move ngrok.exe C:\Windows\System32\ngrok.exe
+          # Önceki choco önbelleğini temizleyip doğrudan en güncel resmi ngrok paketini kuruyoruz
+          choco install ngrok -y --force
 
       - name: 🔧 Enable RDP & Configure Firewall
         run: |
@@ -31,7 +25,7 @@ jobs:
 
       - name: 🚀 Start Ngrok Tunnel with Token
         run: |
-          # Aldığınız yeni v3 uyumlu token doğrudan tünel komutuna bağlandı
+          # Güncel v3 sürümü üzerinden tüneli ve tokenı doğrudan ateşliyoruz
           cmd /c "start /b ngrok tcp 3389 --authtoken=3FzH9IzzHPXS7X4MlMj9Jy3fNEH_6fFMfBZcGQ6KjqF2kpY7a > ngrok_output.log 2>&1"
 
       - name: 🌐 Get RDP URL
