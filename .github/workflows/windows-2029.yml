@@ -12,20 +12,22 @@ jobs:
       - name: 🔽 Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 🔧 Enable RDP & Configure Firewall
+      - name: 🔧 Enable RDP, Set Password & Configure Firewall
         run: |
+          # 1. RDP Bağlantısını aktif ediyoruz
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
+          
+          # 2. Girişte kullanacağınız şifreyi kesin olarak 'Password123!' yapıyoruz
+          net user runneradmin Password123! /add
+          net localgroup administrators runneradmin /add
 
       - name: 🚀 Start Reliable TCP Tunnel via Serveo
         shell: pwsh
         run: |
-          # Kart veya üyelik istemeyen, doğrudan ham TCP portu veren Serveo tünelini başlatıyoruz
-          # Bağlantı adresini ve atanan rastgele portu kaydetmek için çıktıları dosyaya yönlendiriyoruz
+          # Arka planda güvenli SSH tünelimizi başlatıyoruz
           Start-Process -FilePath "ssh" -ArgumentList "-o StrictHostKeyChecking=no -R 0:127.0.0.1:3389 serveo.net" -RedirectStandardOutput "serveo_output.txt" -WindowStyle Hidden
-          
-          # Tünelin ayağa kalkması ve port numarasını alması için bekliyoruz
           Start-Sleep -Seconds 15
 
       - name: 🌐 Display RDP Connection URL
@@ -33,17 +35,15 @@ jobs:
         run: |
           if (Test-Path "serveo_output.txt") {
             $Log = Get-Content "serveo_output.txt" -Raw
-            
-            # Log dosyasından 'Forwarding HTTP' yerine TCP portunu yakalıyoruz
             if ($Log -match "serveo.net:\d+") {
-               $RdpAddress = $Matches[0]
+               $RdpAddress = $Matches
                Write-Host "=========================================="
                Write-Host "🎉 RDP BAĞLANTI ADRESİNİZ BAŞARIYLA OLUŞTU!"
                Write-Host "Uzak Masaüstü programına aynen şu adresi yazın:"
                Write-Host $RdpAddress
                Write-Host "=========================================="
                Write-Host "👤 Kullanıcı Adı: runneradmin"
-               Write-Host "🔑 Şifre: Belirlenmedi (Boş geçebilir veya üst adımlardan bakabilirsiniz)"
+               Write-Host "🔑 Şifre: Password123!"
                Write-Host "=========================================="
             } else {
                Write-Host "❌ Tünel başlatıldı fakat port numarası alınamadı. Log çıktısı:"
