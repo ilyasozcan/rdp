@@ -21,12 +21,13 @@ jobs:
       - name: 🚀 Start Ngrok Tunnel via Node.js SDK
         shell: pwsh
         run: |
-          # 1. Resmi güncel ngrok kütüphanesini kuruyoruz
+          # 1. Resmi ngrok Node.js motorunu kuruyoruz
           npm install @ngrok/ngrok
           
-          # 2. Arka planda çalışacak ve tüneli Javascript ile açacak scripti oluşturuyoruz
+          # 2. Logları bir dosyaya yazacak şekilde Javascript kodunu güncelliyoruz
           $jsCode = @"
           const ngrok = require('@ngrok/ngrok');
+          const fs = require('fs');
           (async function() {
             try {
               const session = await new ngrok.SessionBuilder()
@@ -34,15 +35,13 @@ jobs:
                 .connect();
               const tunnel = await session.tcpEndpoint()
                 .listen();
-              console.log('==========================================');
-              console.log('🎉 RDP BAĞLANTI ADRESİNİZ:');
-              console.log(tunnel.url());
-              console.log('==========================================');
               
-              // Tünelin açık kalması için döngü
+              // Adresi GitHub'ın okuyabilmesi için dosyaya yazıyoruz
+              fs.writeFileSync('rdp_url.txt', tunnel.url());
+              
               setInterval(() => {}, 1000);
             } catch (err) {
-              console.error('❌ Tünel başlatılamadı:', err);
+              fs.writeFileSync('rdp_url.txt', 'HATA: ' + err.message);
               process.exit(1);
             }
           })();
@@ -50,11 +49,25 @@ jobs:
           
           Set-Content -Path "start_tunnel.js" -Value $jsCode
           
-          # 3. Scripti arka planda başlatıyoruz
+          # 3. Süreci arka planda başlatıyoruz
           Start-Process -FilePath "node" -ArgumentList "start_tunnel.js" -WindowStyle Hidden
           
-          # Tünelin adresi loglara yazması için biraz bekliyoruz
-          Start-Sleep -Seconds 10
+          # Tünelin adresi dosyaya yazması için 12 saniye bekliyoruz
+          Start-Sleep -Seconds 12
+
+      - name: 🌐 Display RDP Connection URL
+        shell: pwsh
+        run: |
+          # Oluşan adresi okuyor ve doğrudan GitHub ekranına basıyoruz
+          if (Test-Path "rdp_url.txt") {
+            $Url = Get-Content "rdp_url.txt"
+            Write-Host "=========================================="
+            Write-Host "🎉 RDP BAĞLANTI ADRESİNİZ:"
+            Write-Host $Url
+            Write-Host "=========================================="
+          } else {
+            Write-Host "❌ Adres dosyası henüz oluşturulamadı."
+          }
 
       - name: ⏳ Keep Alive
         run: |
