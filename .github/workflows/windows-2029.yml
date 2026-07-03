@@ -24,8 +24,8 @@ jobs:
 
       - name: 📦 Extract Ngrok
         run: |
-          # Klasör çakışmalarını önlemek için -Force parametresi ekledik
-          Expand-Archive -Path ngrok.zip -DestinationPath . -Force
+          # PowerShell hatasını engellemek için yerleşik tar.exe kullanıyoruz
+          tar -xf ngrok.zip
 
       - name: 🔐 Set Ngrok Authtoken
         shell: pwsh
