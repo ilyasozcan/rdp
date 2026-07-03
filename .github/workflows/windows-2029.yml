@@ -20,7 +20,6 @@ jobs:
 
       - name: 📦 Install Ngrok via Chocolatey
         run: |
-          # Zip indirme ve çıkarma dertlerini bitiren en güvenli yöntem
           choco install ngrok -y
 
       - name: 🔐 Set Ngrok Authtoken
@@ -39,16 +38,25 @@ jobs:
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
 
       - name: 🚀 Start Ngrok Tunnel (Hidden Window)
-        run: Start-Process -WindowStyle Hidden PowerShell -ArgumentList 'ngrok tcp --region ap 3389'
+        run: |
+          # Logları kaydederek arka planda tüneli başlatıyoruz
+          Start-Process -WindowStyle Hidden PowerShell -ArgumentList 'ngrok tcp 3389 --log=stdout > ngrok.log'
 
       - name: 🌐 Get RDP URL
         run: |
-          Start-Sleep -Seconds 12
+          # Tünelin oturması için 15 saniye bekliyoruz
+          Start-Sleep -Seconds 15
           $Response = Invoke-RestMethod -Uri "http://127.0.0" -ErrorAction SilentlyContinue
           if ($Response) {
-            Write-Host "🎉 RDP BAĞLANTI ADRESİNİZ: $($Response.tunnels.public_url)"
+            Write-Host "=========================================="
+            Write-Host "🎉 RDP BAĞLANTI ADRESİNİZ:"
+            Write-Host $Response.tunnels.public_url
+            Write-Host "=========================================="
           } else {
-            Write-Host "❌ Ngrok URL alınamadı."
+            Write-Host "❌ Ngrok URL alınamadı. Ngrok hata detayları aşağıdadır:"
+            Write-Host "------------------------------------------"
+            if (Test-Path ngrok.log) { Get-Content ngrok.log } else { Write-Host "Log dosyası bulunamadı." }
+            Write-Host "------------------------------------------"
             exit 1
           }
 
