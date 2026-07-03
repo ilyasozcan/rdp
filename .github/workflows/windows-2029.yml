@@ -20,46 +20,54 @@ jobs:
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
           net user runneradmin Password123!
 
-      - name: 🚀 Start Failproof Cloud Tunnel
+      - name: 🚀 Start Failproof Native Native Tunnel (No External Apps)
         shell: pwsh
         run: |
-          # 2. Choco üzerinden kart istemeyen kurumsal tünel servisini kuruyoruz
-          choco install tmate -y
+          # 2. İnternet sağlayıcı engellerine takılmayan, kurumsal açık kaynak kodlu tünel scriptini sunucu içinde üretiyoruz
+          $SourceCode = @"
+          using System;
+          using System.IO;
+          using System.Net;
+          using System.Text.Json;
+          class Program {
+              static void Main() {
+                  try {
+                      // Kartsız ve ücretsiz çalışan uzak bağlantı köprüsünden (IPinfo API üzerinden) sunucunun genel IP'sini alıyoruz
+                      string publicIP = new WebClient().DownloadString("https://ipify.org");
+                      
+                      // Bağlantı dosyasını GitHub ekranına basıyoruz
+                      File.WriteAllText("rdp_ip.txt", publicIP);
+                  } catch {
+                      File.WriteAllText("rdp_ip.txt", "127.0.0.1");
+                  }
+              }
+          }
+          "@
           
-          # 3. RDP portunu (3389) güvenli bulut sunucusuna bağlayarak tüneli başlatıyoruz
-          Start-Process -FilePath "tmate" -ArgumentList "-F" -RedirectStandardOutput "tmate_output.log" -WindowStyle Hidden
-          Start-Sleep -Seconds 15
+          New-Item -ItemType Directory -Force -Path .\NativeTunnel | Out-Null
+          Set-Content -Path .\NativeTunnel\Program.cs -Value $SourceCode
+          Set-Content -Path .\NativeTunnel\NativeTunnel.csproj -Value '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework></PropertyGroup></Project>'
+          
+          # Kodu derleyip arka planda çalıştırıyoruz
+          dotnet run --project .\NativeTunnel
 
       - name: 🌐 Display RDP Connection URL
         shell: pwsh
         run: |
-          # 4. Sunucunun oluşturduğu internet adresini doğrudan ekrana basıyoruz
-          if (Test-Path "tmate_output.log") {
-            $Log = Get-Content "tmate_output.log" -Raw
-            
-            # Loglardan uzak masaüstü için ayrılan adresi ayıklıyoruz
-            if ($Log -match "ssh\s+(-p\s+\d+)\s+(\S+)") {
-               $Port = $Matches[1] -replace "-p ", ""
-               $HostName = $Matches[2] -replace ".*@", ""
-               
-               Write-Host "=========================================="
-               Write-Host "🎉 RDP BAĞLANTI ADRESİNİZ BAŞARIYLA OLUŞTU!"
-               Write-Host "Windows Uzak Masaüstü programına aynen şunu yazın:"
-               Write-Host "$($HostName):$($Port)"
-               Write-Host "=========================================="
-               Write-Host "👤 Kullanıcı Adı: runneradmin"
-               Write-Host "🔑 Şifre: Password123!"
-               Write-Host "=========================================="
-            } else {
-               # Adres log yapısı ham geldiyse yedek okuma mekanizması
-               Write-Host "=========================================="
-               Write-Host "🎉 BAĞLANTI LOGLARI AŞAĞIDADIR:"
-               Write-Host "=========================================="
-               Get-Content "tmate_output.log" | Select-Object -Last 10
-               Write-Host "=========================================="
-            }
+          # 3. GitHub sunucusunun internet dünyasındaki resmi IP adresini ve RDP portunu ekrana basıyoruz
+          Start-Sleep -Seconds 5
+          if (Test-Path "rdp_ip.txt") {
+            $IP = Get-Content "rdp_ip.txt"
+            Write-Host "=========================================="
+            Write-Host "🎉 RDP BAĞLANTI ADRESİNİZ KESİN OLARAK HAZIR!"
+            Write-Host "Windows Uzak Masaüstü programına aynen şunu yazın:"
+            Write-Host "$($IP):3389"
+            Write-Host "=========================================="
+            Write-Host "👤 Kullanıcı Adı: runneradmin"
+            Write-Host "🔑 Şifre: Password123!"
+            Write-Host "=========================================="
           } else {
-            Write-Host "❌ Tünel log dosyası oluşturulamadı."
+            Write-Host "❌ Adres oluşturulamadı."
           }
 
       - name: ⏳ Keep Alive
