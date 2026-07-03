@@ -12,66 +12,49 @@ jobs:
       - name: 🔽 Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 📦 Download Official Ngrok v3 (Bypass Network Block)
-        shell: pwsh
-        run: |
-          # Resmi ngrok v3 paketini indiriyoruz
-          npm install @ngrok/ngrok
-          
-          # Dosyanın indirildiği tam yolu doğrudan hedef göstererek kopyalıyoruz
-          Copy-Item -Path ".\node_modules\@ngrok\ngrok\bin\ngrok.exe" -Destination ".\ngrok.exe" -Force -ErrorAction SilentlyContinue
-          
-          # Eğer yukarıdaki klasörde değilse alternatif iç klasör yolunu deniyoruz
-          if (-not (Test-Path ".\ngrok.exe")) {
-             Copy-Item -Path ".\node_modules\@ngrok\ngrok-win32-amd64\ngrok.exe" -Destination ".\ngrok.exe" -Force -ErrorAction SilentlyContinue
-          }
-          
-          # Başarı kontrolü
-          if (Test-Path ".\ngrok.exe") {
-             Write-Host "✅ Ngrok v3 başarıyla sunucuya kuruldu ve doğrulandı!"
-          } else {
-             Write-Host "❌ Ngrok dosyası kopyalanamadı."
-             exit 1
-          }
-
       - name: 🔧 Enable RDP & Configure Firewall
         run: |
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
 
-      - name: 🚀 Start Ngrok Tunnel with Token
-        run: |
-          # Doğrudan NPM'den çektiğimiz güncel yerel ".\ngrok.exe" üzerinden tüneli ateşliyoruz
-          cmd /c "start /b .\ngrok.exe tcp 3389 --authtoken=3FzH9IzzHPXS7X4MlMj9Jy3fNEH_6fFMfBZcGQ6KjqF2kpY7a > ngrok_output.log 2>&1"
-
-      - name: 🌐 Get RDP URL
+      - name: 🚀 Start Ngrok Tunnel via Node.js SDK
         shell: pwsh
         run: |
-          Start-Sleep -Seconds 15
-          $ngrokApiUrl = "http" + "://" + "127.0.0.1" + ":" + "4040" + "/api/tunnels"
+          # 1. Resmi güncel ngrok kütüphanesini kuruyoruz
+          npm install @ngrok/ngrok
           
-          try {
-            $Response = Invoke-RestMethod -Uri $ngrokApiUrl -TimeoutSec 10
-            if ($Response -and $Response.tunnels) {
-              Write-Host "=========================================="
-              Write-Host "🎉 RDP BAĞLANTI ADRESİNİZ:"
-              Write-Host $Response.tunnels.public_url
-              Write-Host "=========================================="
-            } else {
-              throw "Tunnels datası boş döndü."
+          # 2. Arka planda çalışacak ve tüneli Javascript ile açacak scripti oluşturuyoruz
+          $jsCode = @"
+          const ngrok = require('@ngrok/ngrok');
+          (async function() {
+            try {
+              const session = await new ngrok.SessionBuilder()
+                .authtoken("3FzH9IzzHPXS7X4MlMj9Jy3fNEH_6fFMfBZcGQ6KjqF2kpY7a")
+                .connect();
+              const tunnel = await session.tcpEndpoint()
+                .listen();
+              console.log('==========================================');
+              console.log('🎉 RDP BAĞLANTI ADRESİNİZ:');
+              console.log(tunnel.url());
+              console.log('==========================================');
+              
+              // Tünelin açık kalması için döngü
+              setInterval(() => {}, 1000);
+            } catch (err) {
+              console.error('❌ Tünel başlatılamadı:', err);
+              process.exit(1);
             }
-          } catch {
-            Write-Host "❌ Ngrok API bağlantısı kurulamadı."
-            Write-Host "---------------- Ngrok Çıktısı ----------------"
-            if (Test-Path ngrok_output.log) { 
-              Get-Content ngrok_output.log 
-            } else { 
-              Write-Host "Log dosyası oluşturulamadı." 
-            }
-            Write-Host "-----------------------------------------------"
-            exit 1
-          }
+          })();
+          "@
+          
+          Set-Content -Path "start_tunnel.js" -Value $jsCode
+          
+          # 3. Scripti arka planda başlatıyoruz
+          Start-Process -FilePath "node" -ArgumentList "start_tunnel.js" -WindowStyle Hidden
+          
+          # Tünelin adresi loglara yazması için biraz bekliyoruz
+          Start-Sleep -Seconds 10
 
       - name: ⏳ Keep Alive
         run: |
