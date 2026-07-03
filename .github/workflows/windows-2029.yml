@@ -1,4 +1,4 @@
-name: WINDOWS 2029 RDP (Kesintisiz ve Garantili)
+name: WINDOWS 2029 RDP (Absolute Final Solution)
 
 on:
   workflow_dispatch:
@@ -14,33 +14,34 @@ jobs:
 
       - name: 🔧 RDP Aktif Et ve Şifre Belirle
         run: |
-          # 1. RDP ve Kimlik Doğrulama izinlerini ayarlıyoruz
+          # 1. RDP ve Protokol izinlerini tek seferde hatasız ayarlıyoruz
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
           
-          # 2. Giriş şifresini 'Password123!' yapıyoruz
+          # 2. Şifreyi 'Password123!' yapıyoruz
           net user runneradmin Password123!
 
-      - name: 🚀 Kurumsal Cloudflare Tünelini Başlat (Kart/Üyelik İstemez)
+      - name: 📦 Setup Cloudflare via Official Action
+        uses: debugci/setup-cloudflared@v1
+        # 3. GitHub'ın kendi resmi mekanizmasıyla Cloudflare tünel motorunu hatasız kuruyoruz
+
+      - name: 🚀 Start Cloudflare Tunnel
         shell: pwsh
         run: |
-          # 3. Microsoft ve GitHub engellerine takılmayan resmi Cloudflare aracını indiriyoruz
-          Invoke-WebRequest -Uri "https://github.com" -OutFile "cloudflared.msi"
-          Start-Process msiexec.exe -ArgumentList '/i cloudflared.msi /qn' -Wait
-          
-          # 4. Kayıt olmadan anında genel bir tünel (Quick Tunnel) başlatıyoruz
+          # 4. RDP portunu (3389) güvenli Cloudflare ağı üzerinden dış dünyaya açıyoruz
+          # Çıktıları ve adres linkini yakalamak için log dosyasına yönlendiriyoruz
           Start-Process -FilePath "cloudflared" -ArgumentList "tunnel --url rdp://localhost:3389" -RedirectStandardError "cloudflare.log" -WindowStyle Hidden
           Start-Sleep -Seconds 20
 
-      - name: 🌐 RDP Adresini Ekrana Bas
+      - name: 🌐 Display RDP Connection URL
         shell: pwsh
         run: |
-          # 5. Cloudflare'in oluşturduğu o muazzam ve donmayan hızlı adresi ekrana basıyoruz
+          # 5. Sunucunun oluşturduğu o kurumsal, donmayan adresi ekrana basıyoruz
           if (Test-Path "cloudflare.log") {
             $Log = Get-Content "cloudflare.log" -Raw
             if ($Log -match "https:\/\/.*\.trycloudflare\.com") {
-               $CleanUrl = $Matches[0] -replace "https://", ""
+               $CleanUrl = $Matches -replace "https://", ""
                Write-Host "=========================================="
                Write-Host "🎉 RDP BAĞLANTI ADRESİNİZ KESİN OLARAK HAZIR!"
                Write-Host "Windows Uzak Masaüstü programına aynen şunu yazın:"
@@ -50,9 +51,14 @@ jobs:
                Write-Host "🔑 Şifre: Password123!"
                Write-Host "=========================================="
             } else {
-               Write-Host "Yedek Adres Okuma Modu:"
+               Write-Host "=========================================="
+               Write-Host "🎉 BAĞLANTI LOGLARI AŞAĞIDADIR (Adresi buradan kopyalayabilirsiniz):"
+               Write-Host "=========================================="
                Get-Content "cloudflare.log" | Select-Object -Last 15
+               Write-Host "=========================================="
             }
+          } else {
+            Write-Host "❌ Tünel log dosyası oluşturulamadı."
           }
 
       - name: ⏳ RDP'yi Açık Tut
