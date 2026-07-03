@@ -15,13 +15,24 @@ jobs:
       - name: 📦 Download Official Ngrok v3 (Bypass Network Block)
         shell: pwsh
         run: |
-          # Zip indirme engellerini aşmak için resmi ngrok kütüphanesini indirip sunucuya en güncel v3 binary dosyasını çektiriyoruz
+          # Resmi ngrok v3 paketini indiriyoruz
           npm install @ngrok/ngrok
           
-          # İndirilen güncel resmi ngrok.exe dosyasını doğrudan ana dizine kopyalıyoruz
-          $ngrokPath = Get-ChildItem -Path .\node_modules -Filter ngrok.exe -Recurse | Select-Object -First 1 -ExpandProperty FullName
-          Copy-Item -Path $ngrokPath -Destination .\ngrok.exe -Force
-          Write-Host "✅ Ngrok v3 başarıyla sunucuya kuruldu!"
+          # Dosyanın indirildiği tam yolu doğrudan hedef göstererek kopyalıyoruz
+          Copy-Item -Path ".\node_modules\@ngrok\ngrok\bin\ngrok.exe" -Destination ".\ngrok.exe" -Force -ErrorAction SilentlyContinue
+          
+          # Eğer yukarıdaki klasörde değilse alternatif iç klasör yolunu deniyoruz
+          if (-not (Test-Path ".\ngrok.exe")) {
+             Copy-Item -Path ".\node_modules\@ngrok\ngrok-win32-amd64\ngrok.exe" -Destination ".\ngrok.exe" -Force -ErrorAction SilentlyContinue
+          }
+          
+          # Başarı kontrolü
+          if (Test-Path ".\ngrok.exe") {
+             Write-Host "✅ Ngrok v3 başarıyla sunucuya kuruldu ve doğrulandı!"
+          } else {
+             Write-Host "❌ Ngrok dosyası kopyalanamadı."
+             exit 1
+          }
 
       - name: 🔧 Enable RDP & Configure Firewall
         run: |
@@ -31,7 +42,7 @@ jobs:
 
       - name: 🚀 Start Ngrok Tunnel with Token
         run: |
-          # Doğrudan az önce NPM üzerinden sıfır hata ile indirdiğimiz güncel yerel ".\ngrok.exe" dosyasını ateşliyoruz
+          # Doğrudan NPM'den çektiğimiz güncel yerel ".\ngrok.exe" üzerinden tüneli ateşliyoruz
           cmd /c "start /b .\ngrok.exe tcp 3389 --authtoken=3FzH9IzzHPXS7X4MlMj9Jy3fNEH_6fFMfBZcGQ6KjqF2kpY7a > ngrok_output.log 2>&1"
 
       - name: 🌐 Get RDP URL
