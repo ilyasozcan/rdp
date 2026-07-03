@@ -32,22 +32,28 @@ jobs:
       - name: 🌐 RDP Adresini Ekrana Bas
         shell: pwsh
         run: |
-          if (Test-Path "pinggy.log") {
-            Write-Host "=========================================="
-            Write-Host "🎉 RDP BAĞLANTI ADRESİNİZ AŞAĞIDAKİ LOGLARIN İÇİNDEDİR:"
-            Write-Host "=========================================="
-            
-            # Arka planda dolan log dosyasını ekrana basıyoruz
-            $LogData = Get-Content "pinggy.log"
-            $LogData
-            
-            Write-Host "=========================================="
-            Write-Host "⚠️ Yukarıda gördüğünüz 'xxxx.free.pinggy.link:yyyyy' adresini kopyalayın."
-            Write-Host "👤 Kullanıcı Adı: runneradmin"
-            Write-Host "🔑 Şifre: Password123!"
-            Write-Host "=========================================="
-          } else {
-            Write-Host "❌ Tünel log dosyası henüz oluşturulamadı."
+          # Adresin tamamen dosyaya işlenmesi için 10 saniye döngüsel kontrol ekliyoruz
+          $retry = 0
+          while ($retry -lt 5) {
+            if (Test-Path "pinggy.log") {
+              $LogData = Get-Content "pinggy.log" -Raw
+              if ($LogData -match "free\.pinggy\.link:\d+") {
+                break
+              }
+            }
+            Start-Sleep -Seconds 3
+            $retry++
+          }
+
+          Write-Host "=========================================="
+          Write-Host "🎉 RDP BAĞLANTI ADRESİNİZ AŞAĞIDAKİ LOGLARIN İÇİNDEDİR:"
+          Write-Host "=========================================="
+          Get-Content "pinggy.log"
+          Write-Host "=========================================="
+          Write-Host "⚠️ Yukarıda gördüğünüz 'xxxx.free.pinggy.link:yyyyy' adresini kopyalayın."
+          Write-Host "👤 Kullanıcı Adı: runneradmin"
+          Write-Host "🔑 Şifre: Password123!"
+          Write-Host "=========================================="
           }
 
       - name: ⏳ RDP'yi Açık Tut
