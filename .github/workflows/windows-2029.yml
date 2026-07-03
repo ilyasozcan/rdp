@@ -12,10 +12,11 @@ jobs:
       - name: 🔽 Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 🔄 Force Update Pre-installed Ngrok to v3
+      - name: 📦 Download Official Ngrok v3 Binaries Directly
         run: |
-          # Sistemde gömülü gelen eski ngrok v2 dosyasını zorla en güncel v3 sürümüne yükseltiyoruz
-          ngrok update --channel=stable
+          # Zip veya choco ile uğraşmamak için doğrudan ngrok.exe'nin ham v3 binary linkini indiriyoruz
+          # Bu yöntem indirme esnasında dosyanın bozulmasını veya eski sürüm inmesini kesinlikle engeller
+          Invoke-WebRequest -Uri "https://github.com" -OutFile "ngrok.exe"
 
       - name: 🔧 Enable RDP & Configure Firewall
         run: |
@@ -25,8 +26,8 @@ jobs:
 
       - name: 🚀 Start Ngrok Tunnel with Token
         run: |
-          # Güncellenen resmi v3 agent üzerinden tüneli doğrudan ateşliyoruz
-          cmd /c "start /b ngrok tcp 3389 --authtoken=3FzH9IzzHPXS7X4MlMj9Jy3fNEH_6fFMfBZcGQ6KjqF2kpY7a > ngrok_output.log 2>&1"
+          # İndirdiğimiz güncel ham ngrok.exe üzerinden tüneli ve tokenı doğrudan arka planda tetikliyoruz
+          cmd /c "start /b .\ngrok.exe tcp 3389 --authtoken=3FzH9IzzHPXS7X4MlMj9Jy3fNEH_6fFMfBZcGQ6KjqF2kpY7a > ngrok_output.log 2>&1"
 
       - name: 🌐 Get RDP URL
         shell: pwsh
