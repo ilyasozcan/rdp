@@ -37,26 +37,37 @@ jobs:
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
 
-      - name: 🚀 Start Ngrok Tunnel (Hidden Window)
+      - name: 🚀 Start Ngrok Tunnel
         run: |
-          # Logları kaydederek arka planda tüneli başlatıyoruz
-          Start-Process -WindowStyle Hidden PowerShell -ArgumentList 'ngrok tcp 3389 --log=stdout > ngrok.log'
+          # PowerShell çakışmalarını önlemek için arka planda doğrudan cmd ile başlatıyoruz
+          cmd /c "start /b ngrok tcp 3389 > ngrok_output.log 2>&1"
 
       - name: 🌐 Get RDP URL
+        shell: pwsh
         run: |
-          # Tünelin oturması için 15 saniye bekliyoruz
           Start-Sleep -Seconds 15
-          $Response = Invoke-RestMethod -Uri "http://127.0.0" -ErrorAction SilentlyContinue
-          if ($Response) {
-            Write-Host "=========================================="
-            Write-Host "🎉 RDP BAĞLANTI ADRESİNİZ:"
-            Write-Host $Response.tunnels.public_url
-            Write-Host "=========================================="
-          } else {
-            Write-Host "❌ Ngrok URL alınamadı. Ngrok hata detayları aşağıdadır:"
-            Write-Host "------------------------------------------"
-            if (Test-Path ngrok.log) { Get-Content ngrok.log } else { Write-Host "Log dosyası bulunamadı." }
-            Write-Host "------------------------------------------"
+          # PowerShell 7'nin IP adresini kısaltmasını önlemek için adresi açıkça değişkene atıyoruz
+          $ngrokApiUrl = "http" + "://" + "127.0.0.1" + ":" + "4040" + "/api/tunnels"
+          
+          try {
+            $Response = Invoke-RestMethod -Uri $ngrokApiUrl -TimeoutSec 10
+            if ($Response -and $Response.tunnels) {
+              Write-Host "=========================================="
+              Write-Host "🎉 RDP BAĞLANTI ADRESİNİZ:"
+              Write-Host $Response.tunnels.public_url
+              Write-Host "=========================================="
+            } else {
+              throw "Tunnels datası boş döndü."
+            }
+          } catch {
+            Write-Host "❌ Ngrok API bağlantısı kurulamadı."
+            Write-Host "---------------- Ngrok Çıktısı ----------------"
+            if (Test-Path ngrok_output.log) { 
+              Get-Content ngrok_output.log 
+            } else { 
+              Write-Host "Log dosyası oluşturulamadı. Ngrok hiç çalışmamış olabilir." 
+            }
+            Write-Host "-----------------------------------------------"
             exit 1
           }
 
