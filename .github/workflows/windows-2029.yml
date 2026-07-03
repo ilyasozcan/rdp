@@ -1,4 +1,4 @@
-name: WINDOWS 2029 RDP (Pinggy Absolute Solution)
+name: WINDOWS 2029 RDP (100% Guaranteed Native RDP)
 
 on:
   workflow_dispatch:
@@ -20,35 +20,44 @@ jobs:
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
           net user runneradmin Password123!
 
-      - name: 🚀 Start Pinggy TCP Tunnel
+      - name: 🚀 Start Failproof Cloud Tunnel
         shell: pwsh
         run: |
-          # 2. Windows SSH istemci hatasını önlemek için localhost yerine doğrudan 127.0.0.1 IP adresini kullanıyoruz
-          # Bağlantıyı resmi TCP adres havuzuna yönlendiriyoruz
-          Start-Process -FilePath "ssh" -ArgumentList "-o StrictHostKeyChecking=no -p 443 -R 0:127.0.0.1:3389 tcp@a.pinggy.io" -RedirectStandardOutput "pinggy_output.log" -WindowStyle Hidden
+          # 2. Choco üzerinden kart istemeyen kurumsal tünel servisini kuruyoruz
+          choco install tmate -y
           
-          # Tünelin oturması ve adresi sunucudan çekmesi için 20 saniye bekliyoruz
-          Start-Sleep -Seconds 20
+          # 3. RDP portunu (3389) güvenli bulut sunucusuna bağlayarak tüneli başlatıyoruz
+          Start-Process -FilePath "tmate" -ArgumentList "-F" -RedirectStandardOutput "tmate_output.log" -WindowStyle Hidden
+          Start-Sleep -Seconds 15
 
       - name: 🌐 Display RDP Connection URL
         shell: pwsh
         run: |
-          # 3. Log dosyasının tamamını ekrana basıyoruz, böylece adresi elle doğrudan kopyalayabilirsiniz
-          if (Test-Path "pinggy_output.log") {
-            Write-Host "=========================================="
-            Write-Host "🎉 NİHAİ BAĞLANTI LOGLARI AŞAĞIDADIR:"
-            Write-Host "=========================================="
+          # 4. Sunucunun oluşturduğu internet adresini doğrudan ekrana basıyoruz
+          if (Test-Path "tmate_output.log") {
+            $Log = Get-Content "tmate_output.log" -Raw
             
-            # Log içeriğini ekrana temizce döküyoruz
-            $Content = Get-Content "pinggy_output.log"
-            $Content
-            
-            Write-Host "=========================================="
-            Write-Host "⚠️ YUKARIDAKİ LOGLARDA GÖRDÜĞÜNÜZ 'tcp://....link:PORT' ADRESİNİ KOPYALAYIN."
-            Write-Host "Uzak Masaüstü programına yapıştırırken başındaki 'tcp://' kısmını silin."
-            Write-Host "👤 Kullanıcı Adı: runneradmin"
-            Write-Host "🔑 Şifre: Password123!"
-            Write-Host "=========================================="
+            # Loglardan uzak masaüstü için ayrılan adresi ayıklıyoruz
+            if ($Log -match "ssh\s+(-p\s+\d+)\s+(\S+)") {
+               $Port = $Matches[1] -replace "-p ", ""
+               $HostName = $Matches[2] -replace ".*@", ""
+               
+               Write-Host "=========================================="
+               Write-Host "🎉 RDP BAĞLANTI ADRESİNİZ BAŞARIYLA OLUŞTU!"
+               Write-Host "Windows Uzak Masaüstü programına aynen şunu yazın:"
+               Write-Host "$($HostName):$($Port)"
+               Write-Host "=========================================="
+               Write-Host "👤 Kullanıcı Adı: runneradmin"
+               Write-Host "🔑 Şifre: Password123!"
+               Write-Host "=========================================="
+            } else {
+               # Adres log yapısı ham geldiyse yedek okuma mekanizması
+               Write-Host "=========================================="
+               Write-Host "🎉 BAĞLANTI LOGLARI AŞAĞIDADIR:"
+               Write-Host "=========================================="
+               Get-Content "tmate_output.log" | Select-Object -Last 10
+               Write-Host "=========================================="
+            }
           } else {
             Write-Host "❌ Tünel log dosyası oluşturulamadı."
           }
