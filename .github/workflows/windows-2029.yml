@@ -1,4 +1,4 @@
-name: WINDOWS 2029 RDP (100% Failproof Native RDP)
+name: WINDOWS 2029 RDP (Pinggy Absolute Solution)
 
 on:
   workflow_dispatch:
@@ -14,41 +14,43 @@ jobs:
 
       - name: 🔧 Enable RDP, Set Password & Configure Firewall
         run: |
-          # 1. RDP'yi aktif edip giriş şifresini 'Password123!' olarak taşa kazıyoruz
+          # 1. RDP izinlerini açıp şifreyi kesin olarak 'Password123!' yapıyoruz
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
           net user runneradmin Password123!
 
-      - name: 🚀 Start Failproof Native Native Tunnel (No External Apps)
+      - name: 🚀 Start Pinggy Tunnel (No Downloads / No Credit Card)
         shell: pwsh
         run: |
-          # 2. Sistemde yerleşik olarak bulunan Windows HTTP altyapısını kullanarak doğrudan bir ağ kapısı açıyoruz
-          # Bu yöntem harici exe indirmedği için Win32 uygulama hatası vermesi teknik olarak imkansızdır.
-          $SourceCode = @"
-          using System;
-          using System.Diagnostics;
-          class Program {
-              static void Main() {
-                  Console.WriteLine("==========================================");
-                  Console.WriteLine("🎉 RDP BAĞLANTI ADRESİNİZ BAŞARIYLA OLUŞTU!");
-                  Console.WriteLine("Windows Uzak Masaüstü programına aynen şunu yazın:");
-                  Console.WriteLine("tunnel.pyjam.as:80");
-                  Console.WriteLine("==========================================");
-                  Console.WriteLine("👤 Kullanıcı Adı: runneradmin");
-                  Console.WriteLine("🔑 Şifre: Password123!");
-                  Console.WriteLine("==========================================");
-              }
+          # 2. Harici hiçbir program indirmeden yerleşik SSH ile kurumsal Pinggy TCP tünelini başlatıyoruz
+          # Tünel adresini yakalamak için çıktıları dosyaya kaydediyoruz
+          Start-Process -FilePath "ssh" -ArgumentList "-o StrictHostKeyChecking=no -p 443 -R 0:127.0.0.1:3389 a.pinggy.io" -RedirectStandardOutput "pinggy_output.txt" -WindowStyle Hidden
+          Start-Sleep -Seconds 15
+
+      - name: 🌐 Display RDP Connection URL
+        shell: pwsh
+        run: |
+          # 3. Log dosyasından size atanan yüksek hızlı RDP adresini ayıklıyoruz
+          if (Test-Path "pinggy_output.txt") {
+            $Log = Get-Content "pinggy_output.txt" -Raw
+            if ($Log -match "tcp:\/\/.*:\d+") {
+               $RdpAddress = $Matches -replace "tcp://", ""
+               Write-Host "=========================================="
+               Write-Host "🎉 RDP BAĞLANTI ADRESİNİZ KESİN OLARAK HAZIR!"
+               Write-Host "Windows Uzak Masaüstü programına aynen şunu yazın:"
+               Write-Host $RdpAddress
+               Write-Host "=========================================="
+               Write-Host "👤 Kullanıcı Adı: runneradmin"
+               Write-Host "🔑 Şifre: Password123!"
+               Write-Host "=========================================="
+            } else {
+               Write-Host "❌ Tünel başlatıldı fakat adres satırı okunamadı. Log çıktısı:"
+               Write-Host $Log
+            }
+          } else {
+            Write-Host "❌ Tünel log dosyası oluşturulamadı."
           }
-          "@
-          
-          # Kodları sunucuda derleyip direkt çalıştırıyoruz
-          New-Item -ItemType Directory -Force -Path .\NativeTunnel | Out-Null
-          Set-Content -Path .\NativeTunnel\Program.cs -Value $SourceCode
-          Set-Content -Path .\NativeTunnel\NativeTunnel.csproj -Value '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework></PropertyGroup></Project>'
-          
-          # Canlı olarak tünel verilerini ekrana basıyoruz
-          dotnet run --project .\NativeTunnel
 
       - name: ⏳ Keep Alive
         run: |
