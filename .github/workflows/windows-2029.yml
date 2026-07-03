@@ -1,4 +1,4 @@
-name: WINDOWS 2029 RDP (Secure TCP)
+name: WINDOWS 2029 RDP (Absolute Final Fix)
 
 on:
   workflow_dispatch:
@@ -14,28 +14,31 @@ jobs:
 
       - name: 🔧 Enable RDP, Set Password & Configure Firewall
         run: |
-          # RDP Bağlantısını aktif ediyoruz
+          # 1. RDP bağlantısını aktif ediyoruz ve şifreyi kesinleştiriyoruz
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
-          
-          # Mevcut kullanıcının şifresini hata almadan 'Password123!' olarak güncelliyoruz
           net user runneradmin Password123!
 
-      - name: 🚀 Start Reliable TCP Tunnel via Serveo
+      - name: 🚀 Start Reliable Loophole TCP Tunnel
         shell: pwsh
         run: |
-          # Arka planda güvenli SSH tünelimizi başlatıyoruz
-          Start-Process -FilePath "ssh" -ArgumentList "-o StrictHostKeyChecking=no -R 0:127.0.0.1:3389 serveo.net" -RedirectStandardOutput "serveo_output.txt" -WindowStyle Hidden
+          # 2. Güvenilir ve tamamen ücretsiz Loophole TCP aracını sunucuya çekiyoruz
+          Invoke-WebRequest -Uri "https://github.com" -OutFile "loophole.zip"
+          tar -xf loophole.zip
+          
+          # 3. Tüneli arka planda başlatıp logları kaydediyoruz
+          Start-Process -FilePath ".\loophole.exe" -ArgumentList "tcp 3389" -RedirectStandardOutput "loophole.log" -WindowStyle Hidden
           Start-Sleep -Seconds 15
 
-      - name: 🌐 Get RDP URL
+      - name: 🌐 Display RDP Connection URL
         shell: pwsh
         run: |
-          if (Test-Path "serveo_output.txt") {
-            $Log = Get-Content "serveo_output.txt" -Raw
-            if ($Log -match "serveo.net:\d+") {
-               $RdpAddress = $Matches
+          # 4. Log dosyasından adresi çekip ekrana yazdırıyoruz
+          if (Test-Path "loophole.log") {
+            $Log = Get-Content "loophole.log" -Raw
+            if ($Log -match "tcp:\/\/.*:\d+") {
+               $RdpAddress = $Matches[0] -replace "tcp://", ""
                Write-Host "=========================================="
                Write-Host "🎉 RDP BAĞLANTI ADRESİNİZ BAŞARIYLA OLUŞTU!"
                Write-Host "Uzak Masaüstü programına aynen şu adresi yazın:"
@@ -45,11 +48,11 @@ jobs:
                Write-Host "🔑 Şifre: Password123!"
                Write-Host "=========================================="
             } else {
-               Write-Host "❌ Tünel başlatıldı fakat port numarası alınamadı. Log çıktısı:"
+               Write-Host "❌ Tünel başlatıldı fakat adres alınamadı. Log çıktısı:"
                Write-Host $Log
             }
           } else {
-            Write-Host "❌ Tünel dosyası oluşturulamadı."
+            Write-Host "❌ Tünel log dosyası oluşturulamadı."
           }
 
       - name: ⏳ Keep Alive
