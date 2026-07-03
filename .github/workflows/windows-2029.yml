@@ -12,12 +12,10 @@ jobs:
       - name: 🔽 Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 🔽 Download and Extract Ngrok
-        shell: pwsh
+      - name: 📦 Install Ngrok via Chocolatey
         run: |
-          # En güncel kararlı sürümü doğrudan indirip klasöre açıyoruz
-          Invoke-WebRequest https://equinox.io -OutFile ngrok.zip
-          Expand-Archive -Path ngrok.zip -DestinationPath . -Force
+          # Hata veren zip ve arşiv adımlarını tamamen kaldırıp resmi paketle kuruyoruz
+          choco install ngrok -y
 
       - name: 🔧 Enable RDP & Configure Firewall
         run: |
@@ -27,9 +25,8 @@ jobs:
 
       - name: 🚀 Start Ngrok Tunnel with Token
         run: |
-          # Tokenı başka bir yere kaydetmek yerine doğrudan çalıştırma komutuna bağlıyoruz
-          # Böylece ERR_NGROK_4018 authtoken hatası almanız imkansız hale gelir
-          cmd /c "start /b .\ngrok.exe tcp 3389 --authtoken=3FzH9IzzHPXS7X4MlMj9Jy3fNEH_6fFMfBZcGQ6KjqF2kpY7a > ngrok_output.log 2>&1"
+          # Tokenı sisteme kaydetmeden direkt tünel komutuna bağlıyoruz (Hata riskini sıfırlar)
+          cmd /c "start /b ngrok tcp 3389 --authtoken=3FzH9IzzHPXS7X4MlMj9Jy3fNEH_6fFMfBZcGQ6KjqF2kpY7a > ngrok_output.log 2>&1"
 
       - name: 🌐 Get RDP URL
         shell: pwsh
