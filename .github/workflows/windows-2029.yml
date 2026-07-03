@@ -12,10 +12,11 @@ jobs:
       - name: 🔽 Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 📦 Install Official Ngrok v3 via NPM
+      - name: 🔄 Force Update Pre-installed Ngrok to v3
+        shell: cmd
         run: |
-          # Ağ engellerine ve eski choco sürümlerine takılmayan en güvenli v3 kurulum yöntemi
-          npm install -g ngrok
+          # PowerShell çakışmalarını önlemek için doğrudan CMD üzerinden ngrok'u v3'e güncelliyoruz
+          ngrok update --channel=stable
 
       - name: 🔧 Enable RDP & Configure Firewall
         run: |
@@ -25,7 +26,7 @@ jobs:
 
       - name: 🚀 Start Ngrok Tunnel with Token
         run: |
-          # Tokenı doğrudan güncel v3 agent'a bağlayarak arka planda tüneli başlatıyoruz
+          # Güncellenen resmi v3 agent üzerinden tüneli doğrudan ateşliyoruz
           cmd /c "start /b ngrok tcp 3389 --authtoken=3FzH9IzzHPXS7X4MlMj9Jy3fNEH_6fFMfBZcGQ6KjqF2kpY7a > ngrok_output.log 2>&1"
 
       - name: 🌐 Get RDP URL
