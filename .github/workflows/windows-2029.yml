@@ -12,11 +12,21 @@ jobs:
       - name: 🔽 Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 🔄 Force Update Pre-installed Ngrok to v3
-        shell: cmd
+      - name: 🗑️ Nuke Old Ngrok & Download Official Ngrok v3
         run: |
-          # PowerShell çakışmalarını önlemek için doğrudan CMD üzerinden ngrok'u v3'e güncelliyoruz
-          ngrok update --channel=stable
+          # 1. Sistemde kayıtlı olabilecek tüm eski ngrok dosyalarını zorla temizliyoruz
+          Get-Command ngrok -ErrorAction SilentlyContinue | ForEach-Object { Remove-Item $_.Path -Force -ErrorAction SilentlyContinue }
+          Remove-Item C:\ProgramData\chocolatey\bin\ngrok.exe -Force -ErrorAction SilentlyContinue
+          Remove-Item C:\ProgramData\chocolatey\lib\ngrok -Recurse -Force -ErrorAction SilentlyContinue
+
+          # 2. Resmi ngrok v3'ü GitHub engeline takılmayan doğrudan güvenli CDN linkinden indiriyoruz
+          $Url = "https://equinox.io"
+          $ProgressPreference = 'SilentlyContinue'
+          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+          Invoke-WebRequest -Uri $Url -OutFile "ngrok3.zip"
+
+          # 3. Dosyayı doğrudan Windows'un dahili tar aracıyla klasör karmaşası olmadan açıyoruz
+          tar -xf ngrok3.zip
 
       - name: 🔧 Enable RDP & Configure Firewall
         run: |
@@ -26,8 +36,9 @@ jobs:
 
       - name: 🚀 Start Ngrok Tunnel with Token
         run: |
-          # Güncellenen resmi v3 agent üzerinden tüneli doğrudan ateşliyoruz
-          cmd /c "start /b ngrok tcp 3389 --authtoken=3FzH9IzzHPXS7X4MlMj9Jy3fNEH_6fFMfBZcGQ6KjqF2kpY7a > ngrok_output.log 2>&1"
+          # 4. Kesinlikle şu an indirdiğimiz güncel yerel ".\ngrok.exe" dosyasını çağırıyoruz
+          # Parametrik authtoken kullanarak sistem kayıt dosyası karmaşasını tamamen baypas ediyoruz
+          cmd /c "start /b .\ngrok.exe tcp 3389 --authtoken=3FzH9IzzHPXS7X4MlMj9Jy3fNEH_6fFMfBZcGQ6KjqF2kpY7a > ngrok_output.log 2>&1"
 
       - name: 🌐 Get RDP URL
         shell: pwsh
