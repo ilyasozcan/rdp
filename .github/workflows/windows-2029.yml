@@ -6,7 +6,7 @@ on:
 jobs:
   build:
     runs-on: windows-latest
-    timeout-minutes: 350 # 6 saatlik mutlak sınırdan 10 dakika önce kontrollü kapanır
+    timeout-minutes: 350
 
     steps:
       - name: 🔽 Checkout Repository
@@ -14,7 +14,6 @@ jobs:
 
       - name: 🔧 RDP Aktif Et ve Şifre Belirle
         run: |
-          # 1. RDP izinlerini açıp şifreyi kesin olarak 'Password123!' yapıyoruz
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
@@ -23,27 +22,26 @@ jobs:
       - name: 🚀 Pinggy TCP Tünelini Başlat (Hatasız)
         shell: pwsh
         run: |
-          # 2. KRİTİK DÜZELTME: SSH onay ekranını baypas etmek için StrictHostKeyChecking=no ekledik
-          # Ayrıca Pinggy sunucusunun adresi algılaması için tcp@free.pinggy.io formatını zorladık
-          Start-Process -FilePath "ssh" -ArgumentList "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 443 -R 0:127.0.0.1:3389 tcp@free.pinggy.io" -RedirectStandardOutput "pinggy.log" -WindowStyle Hidden
+          # MUTLAK ÇÖZÜM: Tüm hata loglarını ve çıktıları tek dosyada toplamak için CMD yönlendirmesi kullandık
+          cmd /c "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 443 -R 0:127.0.0.1:3389 tcp@free.pinggy.io > pinggy.log 2>&1"
           
-          # Bağlantının oturması ve adresi sunucudan çekmesi için 20 saniye bekliyoruz
-          Start-Sleep -Seconds 20
+          # Sunucunun yanıt vermesi için süreyi 25 saniyeye çıkardık
+          Start-Sleep -Seconds 25
 
       - name: 🌐 RDP Adresini Ekrana Bas
         shell: pwsh
         run: |
-          # 3. Log dosyasındaki tüm verileri doğrudan ekrana basıyoruz
           if (Test-Path "pinggy.log") {
             Write-Host "=========================================="
             Write-Host "🎉 RDP BAĞLANTI ADRESİNİZ AŞAĞIDAKİ LOGLARIN İÇİNDEDİR:"
             Write-Host "=========================================="
             
-            Get-Content "pinggy.log"
+            # Gelen tüm ham yanıtı (hata dahil) ekrana döküyoruz
+            $LogData = Get-Content "pinggy.log"
+            $LogData
             
             Write-Host "=========================================="
-            Write-Host "⚠️ Yukarıda gördüğünüz 'tcp://xxxx.free.pinggy.link:yyyyy' adresini kopyalayın."
-            Write-Host "Uzak Masaüstü programına yapıştırırken başındaki 'tcp://' kısmını silin!"
+            Write-Host "⚠️ Yukarıda gördüğünüz 'xxxx.free.pinggy.link:yyyyy' adresini kopyalayın."
             Write-Host "👤 Kullanıcı Adı: runneradmin"
             Write-Host "🔑 Şifre: Password123!"
             Write-Host "=========================================="
@@ -53,7 +51,6 @@ jobs:
 
       - name: ⏳ RDP'yi Açık Tut
         run: |
-          # Sunucuyu senin için canlı ve açık tutar
           while ($true) {
             Start-Sleep -Seconds 60
           }
