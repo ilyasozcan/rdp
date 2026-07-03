@@ -12,14 +12,10 @@ jobs:
       - name: 🔽 Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 📦 Download and Extract Official Ngrok v3
-        shell: bash
+      - name: 📦 Install Official Ngrok v3 via NPM
         run: |
-          # Güvenlik duvarına takılmamak için resmi zip dosyasını bash üzerinden curl ile çekiyoruz
-          curl -L -o ngrok.zip https://equinox.io
-          
-          # Arşivi tamamen sorunsuz açmak için dahili unzip veya tar kullanıyoruz
-          tar -xf ngrok.zip
+          # Ağ engellerine ve eski choco sürümlerine takılmayan en güvenli v3 kurulum yöntemi
+          npm install -g ngrok
 
       - name: 🔧 Enable RDP & Configure Firewall
         run: |
@@ -29,13 +25,12 @@ jobs:
 
       - name: 🚀 Start Ngrok Tunnel with Token
         run: |
-          # Yeni aldığınız v3 uyumlu token doğrudan yerel klasördeki ngrok.exe'ye bağlandı
-          cmd /c "start /b .\ngrok.exe tcp 3389 --authtoken=3FzH9IzzHPXS7X4MlMj9Jy3fNEH_6fFMfBZcGQ6KjqF2kpY7a > ngrok_output.log 2>&1"
+          # Tokenı doğrudan güncel v3 agent'a bağlayarak arka planda tüneli başlatıyoruz
+          cmd /c "start /b ngrok tcp 3389 --authtoken=3FzH9IzzHPXS7X4MlMj9Jy3fNEH_6fFMfBZcGQ6KjqF2kpY7a > ngrok_output.log 2>&1"
 
       - name: 🌐 Get RDP URL
         shell: pwsh
         run: |
-          # Tünelin oturması için 15 saniye bekliyoruz
           Start-Sleep -Seconds 15
           $ngrokApiUrl = "http" + "://" + "127.0.0.1" + ":" + "4040" + "/api/tunnels"
           
