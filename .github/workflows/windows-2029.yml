@@ -12,10 +12,17 @@ jobs:
       - name: 🔽 Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 📦 Install Ngrok v3 via Chocolatey
+      - name: 📦 Download and Install Official Ngrok v3
         run: |
-          # Eski v2 yerine kesinlikle güncel v3 sürümünü kurmaya zorluyoruz
-          choco install ngrok --version=3.19.0 -y --allow-downgrade
+          # Zip dertleri veya choco hatası olmadan, resmi ngrok v3 exe'sini direkt indiriyoruz
+          Invoke-WebRequest -Uri "https://equinox.io" -OutFile "ngrok.zip"
+          
+          # PowerShell'in hata veren Expand-Archive komutu yerine Windows'un dahili tar aracını temiz bir klasöre açtırıyoruz
+          New-Item -ItemType Directory -Force -Path .\ngrok_bin
+          tar -xf ngrok.zip -C .\ngrok_bin
+          
+          # ngrok.exe'yi sistemin her yerinden çalışacak şekilde PATH'e ekliyoruz
+          Move-Item -Path .\ngrok_bin\ngrok.exe -Destination C:\Windows\System32\ngrok.exe -Force
 
       - name: 🔧 Enable RDP & Configure Firewall
         run: |
@@ -25,7 +32,7 @@ jobs:
 
       - name: 🚀 Start Ngrok Tunnel with Token
         run: |
-          # Tokenı ve tüneli güncel sürüm üzerinde doğrudan tetikliyoruz
+          # Kesinlikle v3 sürümü üzerinden tüneli ve tokenı ateşliyoruz
           cmd /c "start /b ngrok tcp 3389 --authtoken=3FzH9IzzHPXS7X4MlMj9Jy3fNEH_6fFMfBZcGQ6KjqF2kpY7a > ngrok_output.log 2>&1"
 
       - name: 🌐 Get RDP URL
