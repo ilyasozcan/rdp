@@ -2,12 +2,6 @@ name: WINDOWS 2029 RDP
 
 on:
   workflow_dispatch:
-    inputs:
-      increment:
-        type: string
-        description: 'ngrok token'
-        required: false
-        default: ''
 
 jobs:
   build:
@@ -25,11 +19,10 @@ jobs:
       - name: 🔐 Set Ngrok Authtoken
         shell: pwsh
         run: |
-          $inputToken = '${{ github.event.inputs.increment }}'
-          $envToken = '${{ secrets.NGROK_AUTH }}'
-          if ($inputToken) { $token = $inputToken } else { $token = $envToken }
-          if (-not $token) { Write-Host "❌ No token found!"; exit 1 }
-          ngrok config add-authtoken $token
+          # Sağladığınız yeni token doğrudan koda entegre edildi
+          $token = '3FzH9IzzHPXS7X4MlMj9Jy3fNEH_6fFMfBZcGQ6KjqF2kpY7a'
+          Write-Host "Token ngrok'a kaydediliyor..."
+          ngrok authtoken $token
 
       - name: 🔧 Enable RDP & Configure Firewall
         run: |
@@ -39,14 +32,12 @@ jobs:
 
       - name: 🚀 Start Ngrok Tunnel
         run: |
-          # PowerShell çakışmalarını önlemek için arka planda doğrudan cmd ile başlatıyoruz
           cmd /c "start /b ngrok tcp 3389 > ngrok_output.log 2>&1"
 
       - name: 🌐 Get RDP URL
         shell: pwsh
         run: |
           Start-Sleep -Seconds 15
-          # PowerShell 7'nin IP adresini kısaltmasını önlemek için adresi açıkça değişkene atıyoruz
           $ngrokApiUrl = "http" + "://" + "127.0.0.1" + ":" + "4040" + "/api/tunnels"
           
           try {
@@ -65,7 +56,7 @@ jobs:
             if (Test-Path ngrok_output.log) { 
               Get-Content ngrok_output.log 
             } else { 
-              Write-Host "Log dosyası oluşturulamadı. Ngrok hiç çalışmamış olabilir." 
+              Write-Host "Log dosyası oluşturulamadı." 
             }
             Write-Host "-----------------------------------------------"
             exit 1
