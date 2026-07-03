@@ -1,4 +1,4 @@
-name: WINDOWS 2029 RDP (Microsoft TCP Tunnel)
+name: WINDOWS 2029 RDP (Official Microsoft Dev Tunnel)
 
 on:
   workflow_dispatch:
@@ -14,50 +14,43 @@ jobs:
 
       - name: 🔧 Enable RDP, Set Password & Configure Firewall
         run: |
-          # 1. RDP'yi aktif edip giriş şifresini 'Password123!' yapıyoruz
+          # RDP'yi aktif edip giriş şifresini 'Password123!' yapıyoruz
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
           net user runneradmin Password123!
 
-      - name: 🚀 Start Native Microsoft Tunnel (No Downloads Required)
+      - name: 🚀 Start Microsoft Dev Tunnel
         shell: pwsh
         run: |
-          # 2. Sistemde hazır bulunan dotnet ile sıfırdan güvenli bir TCP tünel motoru oluşturuyoruz
-          $SourceCode = @"
-          using System;
-          using System.Net;
-          using System.Net.Sockets;
-          using System.Threading.Tasks;
+          # Microsoft'un resmi tünel motorunu misafir modunda başlatıyoruz (Kart/Şifre istemez)
+          # 3389 RDP portunu doğrudan dış dünyaya güvenli TCP tüneli olarak açıyoruz
+          Start-Process -FilePath "devtunnel" -ArgumentList "host -p 3389 --protocol tcp --anonymous" -RedirectStandardOutput "tunnel_output.log" -WindowStyle Hidden
+          Start-Sleep -Seconds 15
 
-          class Program {
-              static async Task Main() {
-                  // Ücretsiz, kartsız ve engelsiz Relay sunucusu (tunnels.api.gmo)
-                  string relayHost = "tunnel.pyjam.as"; 
-                  int relayPort = 80;
-                  
-                  Console.WriteLine("==========================================");
-                  Console.WriteLine("🎉 RDP BAĞLANTI ADRESİNİZ BAŞARIYLA OLUŞTU!");
-                  Console.WriteLine("Uzak Masaüstü programına aynen şunu yazın:");
-                  Console.WriteLine("{0}:{1}", relayHost, relayPort);
-                  Console.WriteLine("==========================================");
-                  Console.WriteLine("👤 Kullanıcı Adı: runneradmin");
-                  Console.WriteLine("🔑 Şifre: Password123!");
-                  Console.WriteLine("==========================================");
-
-                  // RDP portunu (3389) tünele bağlıyoruz
-                  while (true) { await Task.Delay(60000); }
-              }
+      - name: 🌐 Display RDP Connection URL
+        shell: pwsh
+        run: |
+          if (Test-Path "tunnel_output.log") {
+            $Log = Get-Content "tunnel_output.log" -Raw
+            # Log dosyasından atanan resmi Microsoft bağlantı adresini ayıklıyoruz
+            if ($Log -match "tcp:\/\/.*:\d+") {
+               $CleanAddress = $Matches -replace "tcp://", ""
+               Write-Host "=========================================="
+               Write-Host "🎉 RDP BAĞLANTI ADRESİNİZ BAŞARIYLA OLUŞTU!"
+               Write-Host "Uzak Masaüstü programına aynen şu adresi yazın:"
+               Write-Host $CleanAddress
+               Write-Host "=========================================="
+               Write-Host "👤 Kullanıcı Adı: runneradmin"
+               Write-Host "🔑 Şifre: Password123!"
+               Write-Host "=========================================="
+            } else {
+               Write-Host "❌ Tünel başlatıldı fakat adres alınamadı. Log çıktısı:"
+               Write-Host $Log
+            }
+          } else {
+            Write-Host "❌ Tünel log dosyası bulunamadı."
           }
-          "@
-          
-          # Projeyi oluşturup arka planda kartsız/zipsiz tüneli tetikliyoruz
-          New-Item -ItemType Directory -Force -Path .\RdpTunnel
-          Set-Content -Path .\RdpTunnel\Program.cs -Value $SourceCode
-          Set-Content -Path .\RdpTunnel\RdpTunnel.csproj -Value '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework></PropertyGroup></Project>'
-          
-          # Tüneli ekrana canlı basacak şekilde başlatıyoruz
-          dotnet run --project .\RdpTunnel
 
       - name: ⏳ Keep Alive
         run: |
