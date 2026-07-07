@@ -16,25 +16,31 @@ jobs:
         run: |
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
+          # ÇÖZÜM 1: NLA (Ağ Düzeyinde Kimlik Doğrulama) kapatıldı. İç hata sorununu bu çözer.
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0
           net user runneradmin Password123!
 
       - name: 🚀 Sunucuyu Güvenli SSH Köprüsüne Bağla
         shell: pwsh
         run: |
-          # NOT: 'githrdp2029' ismini kendinize göre benzersiz bir kelimeyle değiştirebilirsiniz (Örn: githrdp_isminiz)
-          # Serveo'ya TCP tüneli olarak bu alt alan adını rezerve ettiriyoruz.
-          Start-Process -FilePath "ssh" -ArgumentList "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ServerAliveInterval=15 -R githrdp2029:3389:127.0.0.1:3389 serveo.net" -WindowStyle Hidden
+          # ÇÖZÜM 2: Rastgele ve kimsenin kullanmadığı benzersiz bir isim üretiyoruz (Örn: githrdp83726)
+          $RandomID = Get-Random -Minimum 10000 -Maximum 99999
+          $Alias = "githrdp" + $RandomID
+          Set-Content -Path "alias.txt" -Value $Alias
+          
+          # Serveo'ya ismi dinamik olarak gönderiyoruz
+          Start-Process -FilePath "ssh" -ArgumentList "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ServerAliveInterval=15 -R ${Alias}:3389:127.0.0.1:3389 serveo.net" -WindowStyle Hidden
           Start-Sleep -Seconds 10
 
       - name: 🌐 RDP Bağlantı Komutunu Ekrana Bas
         shell: pwsh
         run: |
+          $Alias = Get-Content -Path "alias.txt"
           Write-Host "=========================================="
           Write-Host "🎉 SERVED RDP BAĞLANTINIZ KESİN OLARAK HAZIR!"
           Write-Host "=========================================="
           Write-Host "Kendi bilgisayarınızda normal CMD (Komut İstemi) açın ve şu kodu yapıştırıp ENTER'a basın:"
-          Write-Host "ssh -L 3333:githrdp2029:3389 serveo.net"
+          Write-Host "ssh -L 3333:${Alias}:3389 serveo.net"
           Write-Host "=========================================="
           Write-Host "Kodu yazdıktan sonra CMD penceresini kapatmayın (Açık kalsın)."
           Write-Host "Şimdi Uzak Masaüstü programını açıp Bilgisayar kısmına aynen şunu yazın:"
