@@ -12,48 +12,34 @@ jobs:
       - name: 🔽 Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 🚀 RDP Yapılandır, Bilgileri Bas ve Bağlan
+      - name: 🌐 RDP Bilgilerini Ekrana Bas
         shell: pwsh
         run: |
-          # 1. RDP Bağlantısını Aç
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
-          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0
-          net user runneradmin Password123!
-
-          # 2. Klavyeyi Takılmadan Sessizce Türkçe Yap (Kilitlenmeyi Önler)
-          $LangList = New-WinUserLanguageList -Language "tr-TR"
-          $LangList[0].InputMethodTips.Clear()
-          $LangList[0].Add("041f:0000041f")
-          Set-WinUserLanguageList -LanguageList $LangList -Force
-
-          # 3. Bağlantı Bilgilerini Üret ve Anında Ekrana Bas
-          $RandomID = Get-Random -Minimum 10000 -Maximum 99999
-          $Alias = "githrdp" + $RandomID
-          
           Write-Host "=========================================="
-          Write-Host "🎉 SERVED RDP BAĞLANTINIZ KESİN OLARAK HAZIR!"
+          Write-Host "🎉 RDP BAĞLANTI BİLGİLERİNİZ"
           Write-Host "=========================================="
-          Write-Host "Kendi bilgisayarınızda normal CMD (Komut İstemi) açın ve şu kodu yapıştırıp ENTER'a basın:"
-          Write-Host "ssh -L 3333:${Alias}:3389 serveo.net"
+          Write-Host "Kendi bilgisayarınızda normal CMD açın ve şunu yazıp ENTER'a basın:"
+          Write-Host "ssh -L 3333:githrdp2029:3389 serveo.net"
           Write-Host "=========================================="
-          Write-Host "Kodu yazdıktan sonra CMD penceresini kapatmayın (Açık kalsın)."
-          Write-Host "Şimdi Uzak Masaüstü programını açıp Bilgisayar kısmına aynen şunu yazın:"
+          Write-Host "Ardından Uzak Masaüstü programını açıp şunu yazın:"
           Write-Host "127.0.0.1:3333"
           Write-Host "=========================================="
           Write-Host "👤 Kullanıcı Adı: runneradmin"
           Write-Host "🔑 Şifre: Password123!"
           Write-Host "=========================================="
 
-          # 4. SSH Tünelini ve Yedek Döngüyü Arka Planda Başlat
-          $Script = {
-              param($Alias)
-              while ($true) {
-                  ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ServerAliveInterval=10 -o ServerAliveCountMax=30 -R "${Alias}:3389:127.0.0.1:3389" serveo.net
-                  Start-Sleep -Seconds 5
-              }
-          }
-          Start-Process -FilePath "pwsh" -ArgumentList "-Command", $Script.ToString(), "-Args", $Alias -WindowStyle Hidden
+      - name: 🔧 RDP Aktif Et ve Şifre Belirle
+        run: |
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0
+          net user runneradmin Password123!
+
+      - name: 🚀 Sunucuyu Güvenli SSH Köprüsüne Bağla
+        shell: pwsh
+        run: |
+          # Rastgele isim yerine sabit ve temiz isim verdik, bağlantıyı canlı tutma komutları ekledik
+          Start-Process -FilePath "ssh" -ArgumentList "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ServerAliveInterval=10 -o ServerAliveCountMax=30 -R githrdp2029:3389:127.0.0.1:3389 serveo.net" -WindowStyle Hidden
           Start-Sleep -Seconds 5
 
       - name: ⏳ RDP'yi Açık Tut
