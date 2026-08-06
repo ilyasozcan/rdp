@@ -1,26 +1,34 @@
-name: WINDOWS 2029 RDP
+name: WINDOWS 2029 RDP (Kesin Calisma Garantili)
 
 on:
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: windows-2019
     timeout-minutes: 360
 
     steps:
-      - name: RDP Kurulumu
+      - name: 🔽 Depoyu Klonla
+        uses: actions/checkout@v4
+
+      - name: 🔧 RDP Servislerini Yukle ve Sifre Belirle
         run: |
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0
           net user runneradmin Password123!
 
-      - name: Tunel Baglantisi
+      - name: 🚀 Pinggy Tunelini Baslat ve RDPyi Acik Tut
         shell: pwsh
         run: |
           Write-Host "=========================================="
           Write-Host "Kullanici Adi: runneradmin"
           Write-Host "Sifre: Password123!"
           Write-Host "=========================================="
+          Write-Host "Alttaki loglarda tcp://a.pinggy.link:XXXXX adresi cikacak."
+          Write-Host "O adresi direkt Uzak Masaustu programina yazip baglanin."
+          Write-Host "=========================================="
+          
+          # Windows 2019 uzerinde Pinggy tuneli tikanmadan dogrudan calisir
           ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 443 -R 0:127.0.0.1:3389 tcp@a.pinggy.link
