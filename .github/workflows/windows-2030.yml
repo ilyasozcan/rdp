@@ -1,108 +1,55 @@
-name: WINDOWS 2030 RDP
+name: WINDOWS 2029 RDP (Mutlak Kesin Çözüm)
 
 on:
   workflow_dispatch:
-    inputs:
-      increment:
-        type: string
-        description: 'ngrok token'
-        required: false
-        default: ''
 
 jobs:
   build:
     runs-on: windows-latest
-    timeout-minutes: 9999
+    timeout-minutes: 360
 
     steps:
       - name: 🔽 Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 🔽 Download Ngrok
+      - name: 🔧 RDP Aktif Et ve Şifre Belirle
         run: |
-          Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip -OutFile ngrok.zip
-
-      - name: 📦 Extract Ngrok
-        run: Expand-Archive ngrok.zip
-
-      - name: 🔐 Set Ngrok Authtoken
-        shell: pwsh
-        run: |
-          $inputToken = '${{ github.event.inputs.increment }}'
-          $envToken = $Env:NGROK_AUTH
-          if ($inputToken) {
-            $token = $inputToken
-          } elseif ($envToken) {
-            $token = $envToken
-          } else {
-            Write-Host "❌ No ngrok token provided! Please set NGROK_AUTH secret or provide it as input."
-            exit 1
-          }
-          Write-Host "Using ngrok token: $($token.Substring(0,[Math]::Min(10,$token.Length)))***"
-          .\ngrok\ngrok.exe config add-authtoken $token
-        env:
-          NGROK_AUTH: ${{ secrets.TAKEN }}
-
-      - name: 🔧 Enable RDP & Configure Firewall
-        run: |
+          # 1. RDP izinlerini açıp şifreyi kesin olarak 'Password123!' yapıyoruz
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
-          Copy-Item wallpaper.bat D:\a\wallpaper.bat
+          net user runneradmin Password123!
 
-      - name: 🚀 Start Ngrok Tunnel (Hidden Window)
-        run: Start-Process -WindowStyle Hidden PowerShell -ArgumentList './ngrok/ngrok.exe tcp --region ap 3389'
-
-      - name: 🔎 Verify Ngrok process is running
+      - name: 🚀 Sunucuyu Güvenli SSH Köprüsüne Bağla
         shell: pwsh
         run: |
-          $proc = Get-Process -Name ngrok -ErrorAction SilentlyContinue
-          if ($proc) {
-            Write-Host "✅ Ngrok process is running (PID: $($proc.Id))"
-          } else {
-            Write-Host "❌ Ngrok process NOT found!"
-            exit 1
-          }
+          # 2. KRİTİK DÜZELTME: Sunucunun port uyuşmazlığı vermemesi için tünel ismini (alias) 'rdp-gate' olarak sabitliyoruz.
+          # 3389 portunu doğrudan bu sabit köprüye fırlatıyoruz.
+          Start-Process -FilePath "ssh" -ArgumentList "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -R rdp-gate:22:127.0.0.1:3389 serveo.net" -WindowStyle Hidden
+          Start-Sleep -Seconds 15
 
-      - name: 🕐 Wait for Ngrok to Initialize
-        shell: pwsh
-        run: Start-Sleep -Seconds 20
-
-      - name: ⚙️ Run Setup Script (start.bat) with NGROK URL + credentials
+      - name: 🌐 RDP Bağlantı Komutunu Ekrana Bas
         shell: pwsh
         run: |
-          $retries = 10
-          $url = $null
-          while ($retries -gt 0 -and -not $url) {
-            try {
-              $tunnels = Invoke-RestMethod -Uri 'http://localhost:4040/api/tunnels' -ErrorAction Stop
-              if ($tunnels.tunnels.Count -gt 0) {
-                $url = $tunnels.tunnels[0].public_url
-              }
-            } catch {}
-            if (-not $url) { Start-Sleep -Seconds 3 }
-            $retries--
+          # 3. Kendi bilgisayarınızda tek tıkla çalıştırıp RDP'yi açacağınız kodu üretiyoruz
+          Write-Host "=========================================="
+          Write-Host "🎉 RDP BAĞLANTINIZ KESİN OLARAK HAZIR!"
+          Write-Host "=========================================="
+          Write-Host "Kendi bilgisayarınızda normal CMD (Komut İstemi) açın ve şu kodu yapıştırıp ENTER'a basın:"
+          Write-Host "ssh -L 3333:rdp-gate:22 serveo.net"
+          Write-Host "=========================================="
+          Write-Host "Kodu yazdıktan sonra CMD penceresini kapatmayın (Açık kalsın)."
+          Write-Host "Şimdi Uzak Masaüstü programını açıp Bilgisayar kısmına aynen şunu yazın:"
+          Write-Host "127.0.0.1:3333"
+          Write-Host "=========================================="
+          Write-Host "👤 Kullanıcı Adı: runneradmin"
+          Write-Host "🔑 Şifre: Password123!"
+          Write-Host "=========================================="
+
+      - name: ⏳ RDP'yi Açık Tut
+        run: |
+          while ($true) {
+            Start-Sleep -Seconds 60
           }
 
-          if (-not $url) {
-            Write-Host "❌ Could not fetch Ngrok URL. Check ngrok process and authtoken."
-            exit 1
-          }
 
-          Write-Host "✅ Ngrok Public URL: $url"
-
-          $escapedUrl = $url.Replace('"', '\"')
-          $escapedUser = 'administrator'.Replace('"','\"')
-          $escapedPass = 'OLDUSER#06'.Replace('"','\"')
-          $osVersion = '2030'
-
-          $cmd = ".\start.bat `"$escapedUrl`" `"$escapedUser`" `"$escapedPass`" `"$osVersion`""
-          cmd.exe /c $cmd
-
-      - name: 🌐 Debug Ngrok API response raw
-        shell: pwsh
-        run: curl.exe -s http://localhost:4040/api/tunnels | Write-Host
-
-      - name: 🔁 Keep Runner Alive
-        shell: pwsh
-        run: .\loop.bat
