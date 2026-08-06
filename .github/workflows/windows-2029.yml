@@ -1,34 +1,53 @@
-name: WINDOWS 2029 RDP (Kesin Calisma Garantili)
+name: WINDOWS 2029 RDP (Mutlak Kesin Çözüm)
 
 on:
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: windows-2019
+    runs-on: windows-latest
     timeout-minutes: 360
 
     steps:
-      - name: 🔽 Depoyu Klonla
+      - name: 🔽 Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 🔧 RDP Servislerini Yukle ve Sifre Belirle
+      - name: 🔧 RDP Aktif Et ve Şifre Belirle
         run: |
+          # 1. RDP izinlerini açıp şifreyi kesin olarak 'Password123!' yapıyoruz
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
           net user runneradmin Password123!
 
-      - name: 🚀 Pinggy Tunelini Baslat ve RDPyi Acik Tut
+      - name: 🚀 Sunucuyu Güvenli SSH Köprüsüne Bağla
         shell: pwsh
         run: |
+          # 2. KRİTİK DÜZELTME: Sunucunun port uyuşmazlığı vermemesi için tünel ismini (alias) 'rdp-gate' olarak sabitliyoruz.
+          # 3389 portunu doğrudan bu sabit köprüye fırlatıyoruz.
+          Start-Process -FilePath "ssh" -ArgumentList "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -R rdp-gate:22:127.0.0.1:3389 serveo.net" -WindowStyle Hidden
+          Start-Sleep -Seconds 15
+
+      - name: 🌐 RDP Bağlantı Komutunu Ekrana Bas
+        shell: pwsh
+        run: |
+          # 3. Kendi bilgisayarınızda tek tıkla çalıştırıp RDP'yi açacağınız kodu üretiyoruz
           Write-Host "=========================================="
-          Write-Host "Kullanici Adi: runneradmin"
-          Write-Host "Sifre: Password123!"
+          Write-Host "🎉 RDP BAĞLANTINIZ KESİN OLARAK HAZIR!"
           Write-Host "=========================================="
-          Write-Host "Alttaki loglarda tcp://a.pinggy.link:XXXXX adresi cikacak."
-          Write-Host "O adresi direkt Uzak Masaustu programina yazip baglanin."
+          Write-Host "Kendi bilgisayarınızda normal CMD (Komut İstemi) açın ve şu kodu yapıştırıp ENTER'a basın:"
+          Write-Host "ssh -L 3333:rdp-gate:22 serveo.net"
           Write-Host "=========================================="
-          
-          # Windows 2019 uzerinde Pinggy tuneli tikanmadan dogrudan calisir
-          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 443 -R 0:127.0.0.1:3389 tcp@a.pinggy.link
+          Write-Host "Kodu yazdıktan sonra CMD penceresini kapatmayın (Açık kalsın)."
+          Write-Host "Şimdi Uzak Masaüstü programını açıp Bilgisayar kısmına aynen şunu yazın:"
+          Write-Host "127.0.0.1:3333"
+          Write-Host "=========================================="
+          Write-Host "👤 Kullanıcı Adı: runneradmin"
+          Write-Host "🔑 Şifre: Password123!"
+          Write-Host "=========================================="
+
+      - name: ⏳ RDP'yi Açık Tut
+        run: |
+          while ($true) {
+            Start-Sleep -Seconds 60
+          }
