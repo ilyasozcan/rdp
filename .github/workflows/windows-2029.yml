@@ -12,11 +12,19 @@ jobs:
       - name: 🔽 Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 🔧 RDP Aktif Et ve Şifre Belirle
+      - name: 🔧 RDP Aktif Et, Klavye Dilini Türkçe Yap ve Şifre Belirle
         run: |
+          # RDP Bağlantısını Aç
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0
+          
+          # Sistem ve Kullanıcı Klavyesini Türkçe Q (tr-TR) Olarak Ayarla
+          Set-WinUserLanguageList -LanguageList (New-WinUserLanguageList -Language "tr-TR") -Force
+          Set-Culture tr-TR
+          Set-WinSystemLocale tr-TR
+          
+          # Şifre Belirle
           net user runneradmin Password123!
 
       - name: 🚀 Sunucuyu Güvenli SSH Köprüsüne Bağla
@@ -26,18 +34,14 @@ jobs:
           $Alias = "githrdp" + $RandomID
           Set-Content -Path "alias.txt" -Value $Alias
           
-          # SSH bağlantısını başlatan güvenli bir script bloğu oluşturuyoruz
           $Script = {
               param($Alias)
               while ($true) {
-                  # Sinyal parametreleri ile SSH tünelini ön planda çalıştırıyoruz
                   ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ServerAliveInterval=10 -o ServerAliveCountMax=30 -R "${Alias}:3389:127.0.0.1:3389" serveo.net
-                  # Eğer üstteki ssh komutu çökerse veya bağlantı koparsa, 5 saniye bekleyip otomatik yeniden bağlanacak (Yedek Mekanizması)
                   Start-Sleep -Seconds 5
               }
           }
           
-          # Bu döngüyü arka planda güvenli bir şekilde başlatıyoruz
           Start-Process -FilePath "pwsh" -ArgumentList "-Command", $Script.ToString(), "-Args", $Alias -WindowStyle Hidden
           Start-Sleep -Seconds 10
 
