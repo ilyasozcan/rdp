@@ -16,20 +16,29 @@ jobs:
         run: |
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          # ÇÖZÜM 1: NLA (Ağ Düzeyinde Kimlik Doğrulama) kapatıldı. İç hata sorununu bu çözer.
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0
           net user runneradmin Password123!
 
       - name: 🚀 Sunucuyu Güvenli SSH Köprüsüne Bağla
         shell: pwsh
         run: |
-          # ÇÖZÜM 2: Rastgele ve kimsenin kullanmadığı benzersiz bir isim üretiyoruz (Örn: githrdp83726)
           $RandomID = Get-Random -Minimum 10000 -Maximum 99999
           $Alias = "githrdp" + $RandomID
           Set-Content -Path "alias.txt" -Value $Alias
           
-          # Serveo'ya ismi dinamik olarak gönderiyoruz
-          Start-Process -FilePath "ssh" -ArgumentList "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ServerAliveInterval=15 -R ${Alias}:3389:127.0.0.1:3389 serveo.net" -WindowStyle Hidden
+          # SSH bağlantısını başlatan güvenli bir script bloğu oluşturuyoruz
+          $Script = {
+              param($Alias)
+              while ($true) {
+                  # Sinyal parametreleri ile SSH tünelini ön planda çalıştırıyoruz
+                  ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ServerAliveInterval=10 -o ServerAliveCountMax=30 -R "${Alias}:3389:127.0.0.1:3389" serveo.net
+                  # Eğer üstteki ssh komutu çökerse veya bağlantı koparsa, 5 saniye bekleyip otomatik yeniden bağlanacak (Yedek Mekanizması)
+                  Start-Sleep -Seconds 5
+              }
+          }
+          
+          # Bu döngüyü arka planda güvenli bir şekilde başlatıyoruz
+          Start-Process -FilePath "pwsh" -ArgumentList "-Command", $Script.ToString(), "-Args", $Alias -WindowStyle Hidden
           Start-Sleep -Seconds 10
 
       - name: 🌐 RDP Bağlantı Komutunu Ekrana Bas
