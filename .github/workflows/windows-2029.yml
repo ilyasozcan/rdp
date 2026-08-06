@@ -12,27 +12,24 @@ jobs:
       - name: 🔽 Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 🔧 RDP Aktif Et, Klavye Dilini Türkçe Yap ve Şifre Belirle
+      - name: 🚀 RDP Yapılandır, Bilgileri Bas ve Bağlan
+        shell: pwsh
         run: |
-          # RDP Bağlantısını Aç
+          # 1. RDP Bağlantısını Aç
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0
-          
-          # Sistem ve Kullanıcı Klavyesini Türkçe Q (tr-TR) Olarak Ayarla
-          Set-WinUserLanguageList -LanguageList (New-WinUserLanguageList -Language "tr-TR") -Force
-          Set-Culture tr-TR
-          Set-WinSystemLocale tr-TR
-          
-          # Şifre Belirle
           net user runneradmin Password123!
 
-      - name: 🌐 RDP Bağlantı Bilgilerini Hazırla ve Ekrana Bas
-        shell: pwsh
-        run: |
+          # 2. Klavyeyi Takılmadan Sessizce Türkçe Yap (Kilitlenmeyi Önler)
+          $LangList = New-WinUserLanguageList -Language "tr-TR"
+          $LangList[0].InputMethodTips.Clear()
+          $LangList[0].Add("041f:0000041f")
+          Set-WinUserLanguageList -LanguageList $LangList -Force
+
+          # 3. Bağlantı Bilgilerini Üret ve Anında Ekrana Bas
           $RandomID = Get-Random -Minimum 10000 -Maximum 99999
           $Alias = "githrdp" + $RandomID
-          Set-Content -Path "alias.txt" -Value $Alias
           
           Write-Host "=========================================="
           Write-Host "🎉 SERVED RDP BAĞLANTINIZ KESİN OLARAK HAZIR!"
@@ -48,11 +45,7 @@ jobs:
           Write-Host "🔑 Şifre: Password123!"
           Write-Host "=========================================="
 
-      - name: 🚀 Sunucuyu Güvenli SSH Köprüsüne Bağla
-        shell: pwsh
-        run: |
-          $Alias = Get-Content -Path "alias.txt"
-          
+          # 4. SSH Tünelini ve Yedek Döngüyü Arka Planda Başlat
           $Script = {
               param($Alias)
               while ($true) {
@@ -60,7 +53,6 @@ jobs:
                   Start-Sleep -Seconds 5
               }
           }
-          
           Start-Process -FilePath "pwsh" -ArgumentList "-Command", $Script.ToString(), "-Args", $Alias -WindowStyle Hidden
           Start-Sleep -Seconds 5
 
