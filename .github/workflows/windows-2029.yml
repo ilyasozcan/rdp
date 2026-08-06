@@ -1,4 +1,4 @@
-name: WINDOWS 2029 RDP (Pinggy Kesin Çözüm)
+name: WINDOWS 2029 RDP
 
 on:
   workflow_dispatch:
@@ -9,29 +9,18 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: 🔽 Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: 🔧 RDP Aktif Et ve Şifre Belirle
+      - name: RDP Kurulumu
         run: |
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0
           net user runneradmin Password123!
 
-      - name: 🚀 Pinggy Köprüsünü Kur ve RDP'yi Açık Tut
+      - name: Tunel Baglantisi
         shell: pwsh
         run: |
           Write-Host "=========================================="
-          Write-Host "🎉 RDP BAĞLANTINIZ BAŞLATILIYOR..."
+          Write-Host "Kullanici Adi: runneradmin"
+          Write-Host "Sifre: Password123!"
           Write-Host "=========================================="
-          Write-Host "Alttaki loglarda 'tcp://a.pinggy.link:XXXXX' şeklinde bir adres çıkacak."
-          Write-Host "Uzak Masaüstü programını açıp o adresi (Portuyla birlikte) yazarak bağlanın!"
-          Write-Host "=========================================="
-          Write-Host "👤 Kullanıcı Adı: runneradmin"
-          Write-Host "🔑 Şifre: Password123!"
-          Write-Host "=========================================="
-          
-          # Pinggy üzerinden doğrudan dışarıya açık bir TCP portu tünelliyoruz.
-          # Bu komut çalışır çalışmaz ekrana doğrudan bağlanacağınız IP ve Port adresini basacaktır.
           ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 443 -R 0:127.0.0.1:3389 tcp@a.pinggy.link
