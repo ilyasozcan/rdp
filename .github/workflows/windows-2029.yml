@@ -27,28 +27,13 @@ jobs:
           # Şifre Belirle
           net user runneradmin Password123!
 
-      - name: 🚀 Sunucuyu Güvenli SSH Köprüsüne Bağla
+      - name: 🌐 RDP Bağlantı Bilgilerini Hazırla ve Ekrana Bas
         shell: pwsh
         run: |
           $RandomID = Get-Random -Minimum 10000 -Maximum 99999
           $Alias = "githrdp" + $RandomID
           Set-Content -Path "alias.txt" -Value $Alias
           
-          $Script = {
-              param($Alias)
-              while ($true) {
-                  ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ServerAliveInterval=10 -o ServerAliveCountMax=30 -R "${Alias}:3389:127.0.0.1:3389" serveo.net
-                  Start-Sleep -Seconds 5
-              }
-          }
-          
-          Start-Process -FilePath "pwsh" -ArgumentList "-Command", $Script.ToString(), "-Args", $Alias -WindowStyle Hidden
-          Start-Sleep -Seconds 10
-
-      - name: 🌐 RDP Bağlantı Komutunu Ekrana Bas
-        shell: pwsh
-        run: |
-          $Alias = Get-Content -Path "alias.txt"
           Write-Host "=========================================="
           Write-Host "🎉 SERVED RDP BAĞLANTINIZ KESİN OLARAK HAZIR!"
           Write-Host "=========================================="
@@ -62,6 +47,22 @@ jobs:
           Write-Host "👤 Kullanıcı Adı: runneradmin"
           Write-Host "🔑 Şifre: Password123!"
           Write-Host "=========================================="
+
+      - name: 🚀 Sunucuyu Güvenli SSH Köprüsüne Bağla
+        shell: pwsh
+        run: |
+          $Alias = Get-Content -Path "alias.txt"
+          
+          $Script = {
+              param($Alias)
+              while ($true) {
+                  ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ServerAliveInterval=10 -o ServerAliveCountMax=30 -R "${Alias}:3389:127.0.0.1:3389" serveo.net
+                  Start-Sleep -Seconds 5
+              }
+          }
+          
+          Start-Process -FilePath "pwsh" -ArgumentList "-Command", $Script.ToString(), "-Args", $Alias -WindowStyle Hidden
+          Start-Sleep -Seconds 5
 
       - name: ⏳ RDP'yi Açık Tut
         run: |
