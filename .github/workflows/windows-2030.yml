@@ -1,4 +1,4 @@
-name: WINDOWS 2029 RDP (Mutlak Kesin Çözüm)
+name: WINDOWS 2029 RDP (Serveo, yeniden-deneyen)
 
 on:
   workflow_dispatch:
@@ -15,90 +15,112 @@ jobs:
       - name: 🔧 RDP Aktif Et ve Şifre Belirle
         shell: pwsh
         run: |
-          # 1. RDP izinlerini açıp güçlü (örnek) bir şifre ayarlıyoruz
+          # RDP aç
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
-
-          # NOT: production ortamında buradaki sabit şifreyi kullanmayın. Örnek amaçlı 'Password123!' bırakıldı.
+          # Kullanıcı/parola (örnek). Gerçek ortamda secrets kullanın.
           net user runneradmin Password123!
 
-      - name: 🚀 RDP için Güçlü, Yeniden Deneyen SSH Tünel (serveo.net)
+      - name: 🚀 Serveo ile Güvenilir Yeniden-Denen Tünel
         shell: pwsh
         run: |
-          # Açıklama:
-          # - ExitOnForwardFailure=yes: eğer remote alias/port alınamazsa ssh hemen çıkacak -> biz tekrar deneyeceğiz.
-          # - ServerAliveInterval + ServerAliveCountMax: drop'ı daha hızlı tespit eder.
-          # - Eğer alias çakışırsa alias'a kısa bir rastgele ek ekleyip tekrar deniyor.
-          # - Başarılı olursa ekrana kullanıcı tarafında çalıştırılacak ssh -L komutunu basar.
-
+          # Temel alias (GITHUB_RUN_NUMBER varsa kullan)
           $baseAlias = "rdp-gate-$env:GITHUB_RUN_NUMBER"
           if (-not $env:GITHUB_RUN_NUMBER) {
-            # GitHub Actions dışında test ediyorsanız alternatif anahtar:
             $baseAlias = "rdp-gate-$([int](Get-Random -Minimum 1000 -Maximum 9999))"
           }
-
           $alias = $baseAlias
           $attempt = 0
+          $maxAttempts = 30
+          $backoff = 5
 
-          while ($true) {
+          while ($attempt -lt $maxAttempts) {
             $attempt++
             Write-Host "[$(Get-Date -Format o)] Deneme #$attempt ile SSH tüneli başlatılıyor. Alias = $alias"
 
-            # SSH komutunu çalıştırıyoruz ve çıktıyı logluyoruz
-            $log = "ssh-output.log"
-            if (Test-Path $log) { Remove-Item $log -ErrorAction SilentlyContinue }
+            $log = "ssh-$alias.log"
+            if (Test-Path $log) { Remove-Item $log -Force -ErrorAction SilentlyContinue }
 
+            # DİKKAT: remote port olarak 3389 istiyoruz (22 değil). Bu önceki hatayı giderir.
             $sshArgs = @(
+              "-T",                                         # disable pseudo-tty
+              "-o", "BatchMode=yes",
               "-o", "StrictHostKeyChecking=no",
               "-o", "UserKnownHostsFile=/dev/null",
-              "-o", "ExitOnForwardFailure=yes",
-              "-o", "ServerAliveInterval=60",
+              "-o", "ExitOnForwardFailure=yes",             # eğer forward alınamazsa hemen çık
+              "-o", "ServerAliveInterval=30",
               "-o", "ServerAliveCountMax=3",
-              "-R", "$alias:22:127.0.0.1:3389",
-              "serveo.net"
+              "-R", "$alias:3389:127.0.0.1:3389",           # <-- DOĞRU: remotePort:localHost:localPort
+              "serveo.net",
+              "-vvv"
             )
 
-            # Doğrudan ssh'yi çalıştır, çıktıyı kaydet
-            & ssh @sshArgs 2>&1 | Tee-Object -FilePath $log
+            # Başlat ve logla
+            $proc = Start-Process -FilePath "ssh" -ArgumentList $sshArgs -NoNewWindow -PassThru -RedirectStandardOutput $log -RedirectStandardError $log
 
-            # SSH çıkış yaptı, log'u incele
-            $out = ""
-            if (Test-Path $log) { $out = Get-Content $log -Raw }
+            # Kısa sürede 'Forwarding' bekle
+            $found = $false
+            $waitSeconds = 20
+            $start = Get-Date
+            while ((Get-Date) - $start -lt (New-TimeSpan -Seconds $waitSeconds)) {
+              Start-Sleep -Milliseconds 500
+              if (Test-Path $log) {
+                $txt = Get-Content $log -Raw -ErrorAction SilentlyContinue
+                if ($txt -match "Forwarding TCP connections from|Forwarding|Forwarded|Allocated port") {
+                  $found = $true
+                  break
+                }
+              }
+              if ($proc.HasExited) { break }
+            }
 
-            if ($out -match "Forwarding|forwarding|Forwarded|Forward established") {
-              # Eğer burada "Forwarding" benzeri bir çıktı görünürse başarılı olmuş demektir.
+            if ($found) {
+              $txt = Get-Content $log -Raw
               Write-Host "=========================================="
-              Write-Host "🎉 Tünel başarılı şekilde açıldı (muhtemel)."
-              Write-Host "Ekrana yazılan bilgileri inceleyin:"
-              Write-Host $out
-              Write-Host "Yerel makinenizde RDP'ye bağlanmak için (örnek):"
-              Write-Host "1) Kendi bilgisayarınızda bir terminal açın ve şu komutu çalıştırın:"
-              Write-Host "   ssh -o ServerAliveInterval=60 -o ServerAliveCountMax=3 -L 3333:$alias:22 serveo.net"
-              Write-Host "2) Uzak Masaüstü (Remote Desktop) programında bağlanın: 127.0.0.1:3333"
-              Write-Host "👤 Kullanıcı Adı: runneradmin"
-              Write-Host "🔑 Şifre: Password123!"
+              Write-Host "🎉 Serveo tüneli başarılı şekilde açıldı."
+              Write-Host "SSH log (kısa):"
+              Write-Host $txt
+              Write-Host "Yerel makinende tek-tıkla çalıştırmak için:"
+              Write-Host "ssh -L 3333:$alias:3389 serveo.net"
+              Write-Host "Remote Desktop'ta bağlan: 127.0.0.1:3333"
+              Write-Host "Kullanıcı: runneradmin  Şifre: Password123!"
               Write-Host "=========================================="
-              Write-Host "NOT: Eğer bağlandıktan sonra tünel koparsa, bu workflow otomatik yeniden deneyecektir."
-            } else {
-              # Logta hata araması: genelde alias/port zaten kullanılıyor şeklinde mesaj olur
-              Write-Host "[$(Get-Date -Format o)] SSH çıktı/hatada 'Forwarding' ifadesi bulunamadı. Log içeriği:"
-              Write-Host $out
-              Write-Host "5 saniye bekleyip yeni alias ile tekrar deneyeceğim..."
-              Start-Sleep -Seconds 5
-              # alias çakışması olursa benzersizleştir
+              Write-Host "SSH sürecini izliyorum; süreç sonlandığında otomatik yeniden deneyeceğim."
+              $proc.WaitForExit()
+              Write-Host "[$(Get-Date -Format o)] SSH süreci sonlandı. Log sonu:"
+              Write-Host (Get-Content $log -Raw)
+              Write-Host "Kısa bekleyip tekrar deniyorum..."
+              Start-Sleep -Seconds $backoff
               $alias = "$baseAlias-$([int](Get-Random -Minimum 1000 -Maximum 9999))"
               continue
             }
 
-            # SSH disconn/çıkış yaptıysa kısa uyku ve tekrar dene (basit backoff)
-            Write-Host "SSH bağlantısı sonlandı veya çöktü. 10s bekleyip yeniden bağlanıyorum..."
-            Start-Sleep -Seconds 10
-            # alias'ı koru (aynı alias ile devam et) veya istersen tekrar farklı alias ata:
-            # $alias = "$baseAlias-$([int](Get-Random -Minimum 1000 -Maximum 9999))"
+            # Başarısız ise proc'ı sonlandır ve logu incele
+            if (-not $found) {
+              if (-not $proc.HasExited) { try { $proc.Kill(); Start-Sleep -Milliseconds 200 } catch {} }
+              $txt = ""
+              if (Test-Path $log) { $txt = Get-Content $log -Raw -ErrorAction SilentlyContinue }
+              Write-Host "[$(Get-Date -Format o)] 'Forwarding' bulunamadı. SSH log:"
+              Write-Host $txt
+
+              # Eğer logta port/alias çakışması mesajı varsa alias değiştir
+              if ($txt -match "Address already in use|Requested port is not available|cannot listen|already in use") {
+                Write-Host "Alias/port çakışması tespit edildi. Yeni alias ile tekrar deniyorum..."
+                $alias = "$baseAlias-$([int](Get-Random -Minimum 1000 -Maximum 9999))"
+              } else {
+                Write-Host "Sunucuya bağlanma hatası veya serveo taraflı kısıtlama. $backoff saniye bekliyorum..."
+                Start-Sleep -Seconds $backoff
+                $backoff = [Math]::Min($backoff * 2, 300)
+                $alias = "$baseAlias-$([int](Get-Random -Minimum 1000 -Maximum 9999))"
+              }
+              continue
+            }
           }
 
-      - name: ⏳ RDP'yi Açık Tut (Serviste döngü ile zaten tekrar deneyecek)
+          Write-Host "Maksimum deneme sayısına ulaşıldı. İşlemi sonlandırıyorum."
+
+      - name: ⏳ RDP'yi Açık Tut (yedek)
         run: |
           while ($true) {
             Start-Sleep -Seconds 60
