@@ -1,4 +1,4 @@
-name: WINDOWS RDP via Serveo (auto-reconnect)
+name: WINDOWS RDP via Serveo (fixed)
 
 on:
   workflow_dispatch:
@@ -12,36 +12,40 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: RDP'yi aç ve kullanıcı oluştur
-        shell: powershell
+      - name: Aç — RDP'yi etkinleştir ve kullanıcı oluştur
+        shell: pwsh
         run: |
-          Write-Output ">> RDP izinlerini açıyoruz ve kullanıcı ekliyoruz..."
+          Write-Output ">> RDP izinleri açılıyor..."
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
-          # Güvenlik: örnek parola veriliyor; isterseniz değiştirin.
-          if (-not (Get-LocalUser -Name runneradmin -ErrorAction SilentlyContinue)) {
-            New-LocalUser -Name runneradmin -Password (ConvertTo-SecureString "Password123!" -AsPlainText -Force) -FullName "Runner Admin" -Description "Temporary RDP user"
-            Add-LocalGroupMember -Group "Remote Desktop Users" -Member "runneradmin"
+
+          # Geçici kullanıcı (güvenlik için production'da secrets kullanın)
+          $username = "runneradmin"
+          $plain = "Password123!"
+          if (-not (Get-LocalUser -Name $username -ErrorAction SilentlyContinue)) {
+            $secure = ConvertTo-SecureString $plain -AsPlainText -Force
+            New-LocalUser -Name $username -Password $secure -FullName "Runner Admin" -Description "Temporary RDP user"
+            Add-LocalGroupMember -Group "Remote Desktop Users" -Member $username
           } else {
-            Write-Output "Kullanıcı runneradmin zaten mevcut."
-            net user runneradmin Password123!
+            Write-Output "Kullanıcı zaten var; parola güncelleniyor."
+            net user $username $plain
           }
 
-      - name: SSH anahtar taraması (known_hosts) - 443 ve 80
-        shell: powershell
+      - name: SSH known_hosts hazırla (serveo.net için 443 ve 80)
+        shell: pwsh
         run: |
           $sshDir = Join-Path $env:USERPROFILE ".ssh"
           if (-not (Test-Path $sshDir)) { New-Item -ItemType Directory -Path $sshDir | Out-Null }
           $known = Join-Path $sshDir "known_hosts"
-          Write-Output "ssh-keyscan ile serveo.net anahtarlarını alıyoruz..."
-          try { ssh-keyscan -p 443 serveo.net 2>$null >> $known } catch { Write-Output "ssh-keyscan 443 başarısız" }
-          try { ssh-keyscan -p 80 serveo.net 2>$null >> $known } catch { Write-Output "ssh-keyscan 80 başarısız" }
-          Write-Output "known_hosts içeriği (ilk 20 satır):"
-          Get-Content $known -ErrorAction SilentlyContinue | Select-Object -First 20
+          if (Test-Path $known) { Remove-Item $known -Force }
+          Write-Output "ssh-keyscan ile serveo.net anahtarları alınıyor..."
+          ssh-keyscan -p 443 serveo.net 2>$null >> $known || Write-Output "ssh-keyscan 443 başarısız"
+          ssh-keyscan -p 80 serveo.net 2>$null >> $known || Write-Output "ssh-keyscan 80 başarısız"
+          Get-Content $known -ErrorAction SilentlyContinue | Select-Object -First 20 | Write-Output
 
-      - name: Start serveo tunnel with auto-reconnect (PowerShell)
-        shell: powershell
+      - name: Start serveo reverse tunnel and auto-reconnect
+        shell: pwsh
         env:
           RDP_LOCAL_PORT: 3389
           SERVEONAME: rdp-gate
@@ -49,46 +53,41 @@ jobs:
           $log = Join-Path $env:GITHUB_WORKSPACE "serveo.log"
           if (Test-Path $log) { Remove-Item $log -Force }
           $portsToTry = @(443, 80)
-          $remoteNamedSpec = "{0}:3389:127.0.0.1:{1}" -f $Env:SERVEONAME, $Env:RDP_LOCAL_PORT
-          $remoteRandomSpec = "0:127.0.0.1:{0}" -f $Env:RDP_LOCAL_PORT
+          $namedSpec = "{0}:3389:127.0.0.1:{1}" -f $Env:SERVEONAME, $Env:RDP_LOCAL_PORT   # e.g. rdp-gate:3389:127.0.0.1:3389
+          $randomSpec = "0:127.0.0.1:{0}" -f $Env:RDP_LOCAL_PORT                            # e.g. 0:127.0.0.1:3389
 
-          Write-Output "Başlatılıyor: serveo tüneli (auto-reconnect). Log: $log"
+          Write-Output "Serveo tüneli başlatılıyor. Log: $log"
+
           while ($true) {
-            $tunnelStarted = $false
+            $tunnelOk = $false
+
             foreach ($p in $portsToTry) {
-              # Deneme: önce özel alt alan adı (rdp-gate), sonra rastgele port
-              foreach ($remoteSpec in @($remoteNamedSpec, $remoteRandomSpec)) {
-                Write-Output "Deneme: port $p , remoteSpec: $remoteSpec"
+              foreach ($spec in @($namedSpec, $randomSpec)) {
+                Write-Output "Deneme: port=$p spec=$spec"
                 if (Test-Path $log) { Remove-Item $log -Force }
-                $args = "-o StrictHostKeyChecking=no -o UserKnownHostsFile=$null -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -v -p $p -N -R $remoteSpec serveo.net"
+                $args = "-o StrictHostKeyChecking=no -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -v -p $p -N -R $spec serveo.net"
                 Write-Output "SSH args: $args"
+
                 try {
                   $proc = Start-Process -FilePath "ssh" -ArgumentList $args -NoNewWindow -RedirectStandardOutput $log -RedirectStandardError $log -PassThru
                 } catch {
-                  Write-Output "Start-Process redirect başarısız oldu, fallback olarak doğrudan çalıştırıyorum (engelleyici olabilir)."
-                  # Fallback: doğrudan çalıştır (bu durumda PowerShell job block'ta kalır)
+                  Write-Output "Start-Process ile redirect mümkün olmadı, fallback çalıştırılıyor..."
                   & ssh $args 2>&1 | Tee-Object -FilePath $log
                   $proc = $null
                 }
 
-                # Poll log for allocation message for up to 45s
+                # Log'tan allocation kontrolü (maks 45s)
                 $allocated = $null
                 for ($i=0; $i -lt 45; $i++) {
                   Start-Sleep -Seconds 1
                   if (Test-Path $log) {
                     $txt = Get-Content $log -Raw -ErrorAction SilentlyContinue
                     if ($txt -match "Allocated port\s+(\d+)") { $allocated = $Matches[1]; break }
+                    if ($txt -match "Forwarding TCP connections from (\S+)") { $forward = $Matches[1]; $allocated = $forward; break }
                     if ($txt -match "Forwarding port\s+(\d+)") { $allocated = $Matches[1]; break }
-                    # serveo subdomain mesajı kontrolü (ör: Forwarding TCP connections from rdp-gate.serveo.net:3389)
-                    if ($txt -match "Forwarding TCP connections from (\S+)") {
-                      $forwardInfo = $Matches[1]
-                      # try to extract host:port
-                      $allocated = $forwardInfo
-                      break
-                    }
-                    if ($txt -match "remote forward success" -or $txt -match "remote port") { $allocated = "unknown"; break }
+                    if ($txt -match "remote forward success") { $allocated = "unknown"; break }
                     if ($txt -match "Connection closed by" -or $txt -match "Permission denied" -or $txt -match "Connection reset by peer") {
-                      Write-Output "Hızlı başarısızlık tespit edildi, log son satırlar:"
+                      Write-Output "Hızlı başarısızlık tespit edildi; log son satırlar:"
                       $txt.Split("`n")[-20..-1] -join "`n" | Write-Output
                       break
                     }
@@ -97,67 +96,61 @@ jobs:
                 }
 
                 if ($allocated) {
-                  Write-Output "Tünel aktif: $allocated"
-                  # Kaydet env olarak (kısa süreli) ve log'a yaz
                   if ($allocated -match '^\d+$') {
                     Write-Output "SERVEO_REMOTE_PORT=$allocated" | Out-File -FilePath $env:GITHUB_ENV -Encoding ASCII
-                    Write-Output "Bağlanmak için: mstsc /v:serveo.net:$allocated"
+                    Write-Output "Tünel başarılı. Bağlanmak için: mstsc /v:serveo.net:$allocated"
                   } else {
                     Write-Output "SERVEO_REMOTE_ADDR=$allocated" | Out-File -FilePath $env:GITHUB_ENV -Encoding ASCII
-                    Write-Output "Bağlanmak için (subdomain/host): $allocated"
+                    Write-Output "Tünel başarılı. Bağlanmak için host/address: $allocated"
                   }
 
-                  $tunnelStarted = $true
-                  # Bekle: ssh process kapanana kadar bekle ve sonra döngü ile yeniden dene
+                  $tunnelOk = $true
+
+                  # Bekle: process bitene kadar, sonra döngü ile yeniden denenecek
                   if ($proc) {
-                    Write-Output "SSH process id: $($proc.Id). Waiting until it exits..."
+                    Write-Output "SSH process id: $($proc.Id). Waiting for exit..."
                     $proc.WaitForExit()
-                    Write-Output "SSH process exited with code $($proc.ExitCode). Yeniden bağlanılıyor..."
+                    Write-Output "SSH exited (code $($proc.ExitCode)). Yeniden bağlanıyor..."
                   } else {
-                    Write-Output "Doğrudan çalıştırma sonlandı; yeniden denenecek..."
+                    Write-Output "Doğrudan çalıştırma bitti; yeniden denenecek..."
                   }
                   break
                 } else {
-                  Write-Output "Bu deneme başarısız oldu veya allocation alınamadı. SSH sürecini öldürüp diğer seçeneğe geçiliyor."
-                  if ($proc) {
-                    try { if (-not $proc.HasExited) { $proc.Kill() } } catch {}
-                    Start-Sleep -Seconds 2
-                  }
+                  Write-Output "Bu deneme başarısız oldu; diğer seçeneğe geçiliyor."
+                  if ($proc) { try { if (-not $proc.HasExited) { $proc.Kill() } } catch {} }
+                  Start-Sleep -Seconds 2
                 }
-              } # foreach remoteSpec
+              } # spec foreach
 
-              if ($tunnelStarted) { break }
-            } # foreach port
+              if ($tunnelOk) { break }
+            } # port foreach
 
-            if (-not $tunnelStarted) {
-              Write-Output "Tüm kombinasyonlar başarısız oldu. serveo ulaşılabilir olmayabilir. serveo.log (son 200 satır):"
+            if (-not $tunnelOk) {
+              Write-Output "Tüm kombinasyonlar başarısız oldu. serveo.log (tail 200):"
               if (Test-Path $log) { Get-Content $log -Tail 200 | Write-Output }
               Write-Output "30 saniye bekleyip yeniden deneyeceğim..."
               Start-Sleep -Seconds 30
             } else {
-              # ssh kapanmış, kısa bekle ve yeniden dene
-              Write-Output "SSH tüneli durdu. 5 saniye bekleyip yeniden bağlanıyorum..."
+              Write-Output "SSH tüneli sonlandı; 5 saniye bekleyip yeniden denenecek..."
               Start-Sleep -Seconds 5
             }
-          } # while true
+          } # while
 
-      - name: Show instructions (from env)
-        shell: powershell
+      - name: Show connection info
+        shell: pwsh
         run: |
-          Write-Output "-----------------------------"
+          Write-Output "------------------------------"
           if ($Env:SERVEO_REMOTE_PORT) {
-            Write-Output "RDP'ye bağlanmak için (Windows):"
+            Write-Output "Bağlanmak için (Windows):"
             Write-Output "  mstsc /v:serveo.net:$Env:SERVEO_REMOTE_PORT"
-            Write-Output "Kullanıcı: runneradmin  Parola: Password123!"
+            Write-Output "Kullanıcı: .\runneradmin  Parola: Password123!"
           } elseif ($Env:SERVEO_REMOTE_ADDR) {
-            Write-Output "RDP'ye bağlanmak için address/subdomain:"
+            Write-Output "Bağlanmak için host/address:"
             Write-Output "  $Env:SERVEO_REMOTE_ADDR"
-            Write-Output "Kullanıcı: runneradmin  Parola: Password123!"
-            Write-Output "Eğer çıktı tcp://host:port şeklindeyse host:port kullanın."
+            Write-Output "Kullanıcı: .\runneradmin  Parola: Password123!"
           } else {
-            Write-Output "SERVEO_REMOTE_* env yok; logları indirip inceleyin."
+            Write-Output "Henüz SERVEO bilgisi yok. Logları kontrol edin."
           }
-          Write-Output "Serveo log artifact indirilebilir."
 
       - name: Upload serveo log
         uses: actions/upload-artifact@v4
@@ -167,7 +160,7 @@ jobs:
 
       - name: Keep runner alive for manual connection (30 minutes)
         if: success()
-        shell: powershell
+        shell: pwsh
         run: |
-          Write-Output "Runner 30 dakika boyunca uyanık tutuluyor; işiniz bitince Actions UI'dan job'u durdurun."
+          Write-Output "Runner 30 dakika boyunca uyanık tutuluyor; bağlandıktan sonra Actions UI'dan job'u durdurun."
           Start-Sleep -Seconds 1800
