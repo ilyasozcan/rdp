@@ -17,20 +17,39 @@ jobs:
         run: |
           Set-ItemProperty `
             -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' `
-            -Name "fDenyTSConnections" `
+            -Name 'fDenyTSConnections' `
             -Value 0
 
           Set-ItemProperty `
             -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' `
-            -Name "UserAuthentication" `
+            -Name 'UserAuthentication' `
             -Value 1
 
-          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          Enable-NetFirewallRule -DisplayGroup 'Remote Desktop'
 
-          net user runneradmin "Password123!" /add
-          net localgroup administrators runneradmin /add
+          $user = 'runneradmin'
+          $password = ConvertTo-SecureString 'Password123!' -AsPlainText -Force
 
-          Write-Host "RDP aktif edildi."
+          $existing = Get-LocalUser -Name $user -ErrorAction SilentlyContinue
+
+          if ($existing) {
+            Set-LocalUser -Name $user -Password $password
+          }
+          else {
+            New-LocalUser `
+              -Name $user `
+              -Password $password `
+              -PasswordNeverExpires `
+              -AccountNeverExpires `
+              -UserMayNotChangePassword
+          }
+
+          Add-LocalGroupMember `
+            -Group 'Administrators' `
+            -Member $user `
+            -ErrorAction SilentlyContinue
+
+          Write-Host 'RDP aktif edildi.'
 
       - name: 🚀 Serveo SSH Tünelini Başlat
         shell: pwsh
@@ -42,20 +61,20 @@ jobs:
           Remove-Item $stderrLog -ErrorAction SilentlyContinue
 
           $sshArgs = @(
-            "-p", "443",
-            "-N",
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "UserKnownHostsFile=NUL",
-            "-o", "ServerAliveInterval=30",
-            "-o", "ServerAliveCountMax=3",
-            "-R", "rdp-gate:22:127.0.0.1:3389",
-            "serveo.net"
+            '-p', '443',
+            '-N',
+            '-o', 'StrictHostKeyChecking=no',
+            '-o', 'UserKnownHostsFile=NUL',
+            '-o', 'ServerAliveInterval=30',
+            '-o', 'ServerAliveCountMax=3',
+            '-R', 'rdp-gate:22:127.0.0.1:3389',
+            'serveo.net'
           )
 
-          Write-Host "Serveo başlatılıyor..."
+          Write-Host 'Serveo başlatılıyor...'
 
           $process = Start-Process `
-            -FilePath "ssh.exe" `
+            -FilePath 'ssh.exe' `
             -ArgumentList $sshArgs `
             -RedirectStandardOutput $stdoutLog `
             -RedirectStandardError $stderrLog `
@@ -67,17 +86,14 @@ jobs:
           Start-Sleep -Seconds 15
 
           if ($process.HasExited) {
-            Write-Host "Serveo SSH process kapandı."
-            Write-Host "Exit Code: $($process.ExitCode)"
+            Write-Host "Serveo process kapandı. ExitCode: $($process.ExitCode)"
 
-            Write-Host ""
-            Write-Host "===== STDOUT ====="
+            Write-Host '===== STDOUT ====='
             if (Test-Path $stdoutLog) {
               Get-Content $stdoutLog
             }
 
-            Write-Host ""
-            Write-Host "===== STDERR ====="
+            Write-Host '===== STDERR ====='
             if (Test-Path $stderrLog) {
               Get-Content $stderrLog
             }
@@ -85,48 +101,42 @@ jobs:
             exit 1
           }
 
-          Write-Host ""
-          Write-Host "===== SERVEO STDOUT ====="
+          Write-Host '===== SERVEO STDOUT ====='
           if (Test-Path $stdoutLog) {
             Get-Content $stdoutLog
           }
 
-          Write-Host ""
-          Write-Host "===== SERVEO STDERR ====="
+          Write-Host '===== SERVEO STDERR ====='
           if (Test-Path $stderrLog) {
             Get-Content $stderrLog
           }
 
-          Write-Host ""
-          Write-Host "Serveo SSH tüneli çalışıyor."
+          Write-Host 'Serveo SSH process çalışıyor.'
 
       - name: 🌐 Bağlantı Bilgilerini Göster
         shell: pwsh
         run: |
-          Write-Host ""
-          Write-Host "=========================================="
-          Write-Host "          RDP TÜNELİ HAZIR"
-          Write-Host "=========================================="
-          Write-Host ""
-          Write-Host "Kendi bilgisayarında CMD / PowerShell aç:"
-          Write-Host ""
-          Write-Host "ssh -p 443 -N -L 3333:rdp-gate:22 serveo.net"
-          Write-Host ""
-          Write-Host "Bu pencereyi KAPATMA."
-          Write-Host ""
-          Write-Host "Ardından Uzak Masaüstü bağlantısı:"
-          Write-Host ""
-          Write-Host "127.0.0.1:3333"
-          Write-Host ""
-          Write-Host "Kullanıcı: runneradmin"
-          Write-Host "Şifre: Password123!"
-          Write-Host ""
-          Write-Host "=========================================="
+          Write-Host ''
+          Write-Host '=========================================='
+          Write-Host '          RDP TÜNELİ HAZIR'
+          Write-Host '=========================================='
+          Write-Host ''
+          Write-Host 'Kendi bilgisayarında CMD / PowerShell aç:'
+          Write-Host ''
+          Write-Host 'ssh -p 443 -N -L 3333:rdp-gate:22 serveo.net'
+          Write-Host ''
+          Write-Host 'Bu pencereyi kapatma.'
+          Write-Host ''
+          Write-Host 'RDP: 127.0.0.1:3333'
+          Write-Host 'Kullanıcı: runneradmin'
+          Write-Host 'Şifre: Password123!'
+          Write-Host ''
+          Write-Host '=========================================='
 
       - name: 🔍 Tunnel Durumunu Kontrol Et
         shell: pwsh
         run: |
           while ($true) {
-            Write-Host "[$(Get-Date)] RDP + Serveo aktif..."
+            Write-Host "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Runner aktif..."
             Start-Sleep -Seconds 30
           }
