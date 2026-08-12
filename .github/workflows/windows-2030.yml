@@ -1,166 +1,105 @@
-name: WINDOWS RDP via Serveo (fixed)
+name: WINDOWS 2029 RDP (Mutlak Kesin Çözüm)
 
 on:
   workflow_dispatch:
 
 jobs:
-  serveo-rdp:
+  build:
     runs-on: windows-latest
     timeout-minutes: 360
 
     steps:
-      - name: Checkout
+      - name: 🔽 Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Aç — RDP'yi etkinleştir ve kullanıcı oluştur
+      - name: 🔧 RDP Aktif Et ve Şifre Belirle
         shell: pwsh
         run: |
-          Write-Output ">> RDP izinleri açılıyor..."
+          # 1. RDP izinlerini açıp güçlü (örnek) bir şifre ayarlıyoruz
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
 
-          # Geçici kullanıcı (güvenlik için production'da secrets kullanın)
-          $username = "runneradmin"
-          $plain = "Password123!"
-          if (-not (Get-LocalUser -Name $username -ErrorAction SilentlyContinue)) {
-            $secure = ConvertTo-SecureString $plain -AsPlainText -Force
-            New-LocalUser -Name $username -Password $secure -FullName "Runner Admin" -Description "Temporary RDP user"
-            Add-LocalGroupMember -Group "Remote Desktop Users" -Member $username
-          } else {
-            Write-Output "Kullanıcı zaten var; parola güncelleniyor."
-            net user $username $plain
+          # NOT: production ortamında buradaki sabit şifreyi kullanmayın. Örnek amaçlı 'Password123!' bırakıldı.
+          net user runneradmin Password123!
+
+      - name: 🚀 RDP için Güçlü, Yeniden Deneyen SSH Tünel (serveo.net)
+        shell: pwsh
+        run: |
+          # Açıklama:
+          # - ExitOnForwardFailure=yes: eğer remote alias/port alınamazsa ssh hemen çıkacak -> biz tekrar deneyeceğiz.
+          # - ServerAliveInterval + ServerAliveCountMax: drop'ı daha hızlı tespit eder.
+          # - Eğer alias çakışırsa alias'a kısa bir rastgele ek ekleyip tekrar deniyor.
+          # - Başarılı olursa ekrana kullanıcı tarafında çalıştırılacak ssh -L komutunu basar.
+
+          $baseAlias = "rdp-gate-$env:GITHUB_RUN_NUMBER"
+          if (-not $env:GITHUB_RUN_NUMBER) {
+            # GitHub Actions dışında test ediyorsanız alternatif anahtar:
+            $baseAlias = "rdp-gate-$([int](Get-Random -Minimum 1000 -Maximum 9999))"
           }
 
-      - name: SSH known_hosts hazırla (serveo.net için 443 ve 80)
-        shell: pwsh
-        run: |
-          $sshDir = Join-Path $env:USERPROFILE ".ssh"
-          if (-not (Test-Path $sshDir)) { New-Item -ItemType Directory -Path $sshDir | Out-Null }
-          $known = Join-Path $sshDir "known_hosts"
-          if (Test-Path $known) { Remove-Item $known -Force }
-          Write-Output "ssh-keyscan ile serveo.net anahtarları alınıyor..."
-          ssh-keyscan -p 443 serveo.net 2>$null >> $known || Write-Output "ssh-keyscan 443 başarısız"
-          ssh-keyscan -p 80 serveo.net 2>$null >> $known || Write-Output "ssh-keyscan 80 başarısız"
-          Get-Content $known -ErrorAction SilentlyContinue | Select-Object -First 20 | Write-Output
-
-      - name: Start serveo reverse tunnel and auto-reconnect
-        shell: pwsh
-        env:
-          RDP_LOCAL_PORT: 3389
-          SERVEONAME: rdp-gate
-        run: |
-          $log = Join-Path $env:GITHUB_WORKSPACE "serveo.log"
-          if (Test-Path $log) { Remove-Item $log -Force }
-          $portsToTry = @(443, 80)
-          $namedSpec = "{0}:3389:127.0.0.1:{1}" -f $Env:SERVEONAME, $Env:RDP_LOCAL_PORT   # e.g. rdp-gate:3389:127.0.0.1:3389
-          $randomSpec = "0:127.0.0.1:{0}" -f $Env:RDP_LOCAL_PORT                            # e.g. 0:127.0.0.1:3389
-
-          Write-Output "Serveo tüneli başlatılıyor. Log: $log"
+          $alias = $baseAlias
+          $attempt = 0
 
           while ($true) {
-            $tunnelOk = $false
+            $attempt++
+            Write-Host "[$(Get-Date -Format o)] Deneme #$attempt ile SSH tüneli başlatılıyor. Alias = $alias"
 
-            foreach ($p in $portsToTry) {
-              foreach ($spec in @($namedSpec, $randomSpec)) {
-                Write-Output "Deneme: port=$p spec=$spec"
-                if (Test-Path $log) { Remove-Item $log -Force }
-                $args = "-o StrictHostKeyChecking=no -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -v -p $p -N -R $spec serveo.net"
-                Write-Output "SSH args: $args"
+            # SSH komutunu çalıştırıyoruz ve çıktıyı logluyoruz
+            $log = "ssh-output.log"
+            if (Test-Path $log) { Remove-Item $log -ErrorAction SilentlyContinue }
 
-                try {
-                  $proc = Start-Process -FilePath "ssh" -ArgumentList $args -NoNewWindow -RedirectStandardOutput $log -RedirectStandardError $log -PassThru
-                } catch {
-                  Write-Output "Start-Process ile redirect mümkün olmadı, fallback çalıştırılıyor..."
-                  & ssh $args 2>&1 | Tee-Object -FilePath $log
-                  $proc = $null
-                }
+            $sshArgs = @(
+              "-o", "StrictHostKeyChecking=no",
+              "-o", "UserKnownHostsFile=/dev/null",
+              "-o", "ExitOnForwardFailure=yes",
+              "-o", "ServerAliveInterval=60",
+              "-o", "ServerAliveCountMax=3",
+              "-R", "$alias:22:127.0.0.1:3389",
+              "serveo.net"
+            )
 
-                # Log'tan allocation kontrolü (maks 45s)
-                $allocated = $null
-                for ($i=0; $i -lt 45; $i++) {
-                  Start-Sleep -Seconds 1
-                  if (Test-Path $log) {
-                    $txt = Get-Content $log -Raw -ErrorAction SilentlyContinue
-                    if ($txt -match "Allocated port\s+(\d+)") { $allocated = $Matches[1]; break }
-                    if ($txt -match "Forwarding TCP connections from (\S+)") { $forward = $Matches[1]; $allocated = $forward; break }
-                    if ($txt -match "Forwarding port\s+(\d+)") { $allocated = $Matches[1]; break }
-                    if ($txt -match "remote forward success") { $allocated = "unknown"; break }
-                    if ($txt -match "Connection closed by" -or $txt -match "Permission denied" -or $txt -match "Connection reset by peer") {
-                      Write-Output "Hızlı başarısızlık tespit edildi; log son satırlar:"
-                      $txt.Split("`n")[-20..-1] -join "`n" | Write-Output
-                      break
-                    }
-                  }
-                  if ($proc -and $proc.HasExited) { break }
-                }
+            # Doğrudan ssh'yi çalıştır, çıktıyı kaydet
+            & ssh @sshArgs 2>&1 | Tee-Object -FilePath $log
 
-                if ($allocated) {
-                  if ($allocated -match '^\d+$') {
-                    Write-Output "SERVEO_REMOTE_PORT=$allocated" | Out-File -FilePath $env:GITHUB_ENV -Encoding ASCII
-                    Write-Output "Tünel başarılı. Bağlanmak için: mstsc /v:serveo.net:$allocated"
-                  } else {
-                    Write-Output "SERVEO_REMOTE_ADDR=$allocated" | Out-File -FilePath $env:GITHUB_ENV -Encoding ASCII
-                    Write-Output "Tünel başarılı. Bağlanmak için host/address: $allocated"
-                  }
+            # SSH çıkış yaptı, log'u incele
+            $out = ""
+            if (Test-Path $log) { $out = Get-Content $log -Raw }
 
-                  $tunnelOk = $true
-
-                  # Bekle: process bitene kadar, sonra döngü ile yeniden denenecek
-                  if ($proc) {
-                    Write-Output "SSH process id: $($proc.Id). Waiting for exit..."
-                    $proc.WaitForExit()
-                    Write-Output "SSH exited (code $($proc.ExitCode)). Yeniden bağlanıyor..."
-                  } else {
-                    Write-Output "Doğrudan çalıştırma bitti; yeniden denenecek..."
-                  }
-                  break
-                } else {
-                  Write-Output "Bu deneme başarısız oldu; diğer seçeneğe geçiliyor."
-                  if ($proc) { try { if (-not $proc.HasExited) { $proc.Kill() } } catch {} }
-                  Start-Sleep -Seconds 2
-                }
-              } # spec foreach
-
-              if ($tunnelOk) { break }
-            } # port foreach
-
-            if (-not $tunnelOk) {
-              Write-Output "Tüm kombinasyonlar başarısız oldu. serveo.log (tail 200):"
-              if (Test-Path $log) { Get-Content $log -Tail 200 | Write-Output }
-              Write-Output "30 saniye bekleyip yeniden deneyeceğim..."
-              Start-Sleep -Seconds 30
+            if ($out -match "Forwarding|forwarding|Forwarded|Forward established") {
+              # Eğer burada "Forwarding" benzeri bir çıktı görünürse başarılı olmuş demektir.
+              Write-Host "=========================================="
+              Write-Host "🎉 Tünel başarılı şekilde açıldı (muhtemel)."
+              Write-Host "Ekrana yazılan bilgileri inceleyin:"
+              Write-Host $out
+              Write-Host "Yerel makinenizde RDP'ye bağlanmak için (örnek):"
+              Write-Host "1) Kendi bilgisayarınızda bir terminal açın ve şu komutu çalıştırın:"
+              Write-Host "   ssh -o ServerAliveInterval=60 -o ServerAliveCountMax=3 -L 3333:$alias:22 serveo.net"
+              Write-Host "2) Uzak Masaüstü (Remote Desktop) programında bağlanın: 127.0.0.1:3333"
+              Write-Host "👤 Kullanıcı Adı: runneradmin"
+              Write-Host "🔑 Şifre: Password123!"
+              Write-Host "=========================================="
+              Write-Host "NOT: Eğer bağlandıktan sonra tünel koparsa, bu workflow otomatik yeniden deneyecektir."
             } else {
-              Write-Output "SSH tüneli sonlandı; 5 saniye bekleyip yeniden denenecek..."
+              # Logta hata araması: genelde alias/port zaten kullanılıyor şeklinde mesaj olur
+              Write-Host "[$(Get-Date -Format o)] SSH çıktı/hatada 'Forwarding' ifadesi bulunamadı. Log içeriği:"
+              Write-Host $out
+              Write-Host "5 saniye bekleyip yeni alias ile tekrar deneyeceğim..."
               Start-Sleep -Seconds 5
+              # alias çakışması olursa benzersizleştir
+              $alias = "$baseAlias-$([int](Get-Random -Minimum 1000 -Maximum 9999))"
+              continue
             }
-          } # while
 
-      - name: Show connection info
-        shell: pwsh
-        run: |
-          Write-Output "------------------------------"
-          if ($Env:SERVEO_REMOTE_PORT) {
-            Write-Output "Bağlanmak için (Windows):"
-            Write-Output "  mstsc /v:serveo.net:$Env:SERVEO_REMOTE_PORT"
-            Write-Output "Kullanıcı: .\runneradmin  Parola: Password123!"
-          } elseif ($Env:SERVEO_REMOTE_ADDR) {
-            Write-Output "Bağlanmak için host/address:"
-            Write-Output "  $Env:SERVEO_REMOTE_ADDR"
-            Write-Output "Kullanıcı: .\runneradmin  Parola: Password123!"
-          } else {
-            Write-Output "Henüz SERVEO bilgisi yok. Logları kontrol edin."
+            # SSH disconn/çıkış yaptıysa kısa uyku ve tekrar dene (basit backoff)
+            Write-Host "SSH bağlantısı sonlandı veya çöktü. 10s bekleyip yeniden bağlanıyorum..."
+            Start-Sleep -Seconds 10
+            # alias'ı koru (aynı alias ile devam et) veya istersen tekrar farklı alias ata:
+            # $alias = "$baseAlias-$([int](Get-Random -Minimum 1000 -Maximum 9999))"
           }
 
-      - name: Upload serveo log
-        uses: actions/upload-artifact@v4
-        with:
-          name: serveo-log
-          path: serveo.log
-
-      - name: Keep runner alive for manual connection (30 minutes)
-        if: success()
-        shell: pwsh
+      - name: ⏳ RDP'yi Açık Tut (Serviste döngü ile zaten tekrar deneyecek)
         run: |
-          Write-Output "Runner 30 dakika boyunca uyanık tutuluyor; bağlandıktan sonra Actions UI'dan job'u durdurun."
-          Start-Sleep -Seconds 1800
+          while ($true) {
+            Start-Sleep -Seconds 60
+          }
